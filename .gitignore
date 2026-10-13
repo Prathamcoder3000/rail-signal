@@ -1,0 +1,41 @@
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Environment Variables & Secrets
+.env
+*.local
+
+# Node & Frontend
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# IDEs & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# Large Raw Datasets & Ingestion Outputs (protect git repo from hundreds of MBs)
+data/raw/*.zip
+data/raw/*.tar.gz
+data/raw/operational_journeys/*.csv
+data/raw/datameet/*.json
+data/processed/*.parquet
+data/processed/
