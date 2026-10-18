@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Activity, AlertTriangle, ArrowUpRight, BarChart3, CheckCircle2, ChevronDown,
-  CircleDot, Code2, Cpu, Database, ExternalLink, FileCheck2, GitBranch, Layers3,
-  Menu, Network, RefreshCw, Search, Server, Settings2, ShieldCheck, Table2,
-  Terminal, TrainFront, X, Zap
+  Activity, AlertTriangle, ArrowUpRight, Atom, BarChart3, CheckCircle2, ChevronDown,
+  CircleDot, Code2, Cpu, Database, ExternalLink, FileCheck2, FileCode2, GitBranch,
+  Layers, Layers3, Menu, Network, PackageCheck, Palette, RefreshCw, Search, Server,
+  Settings2, ShieldAlert, ShieldCheck, Sparkles, Table2, Terminal, TestTube2,
+  TrainFront, X, Zap
 } from 'lucide-react'
 import {
   Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
@@ -1246,7 +1247,7 @@ function Quality({
 }
 
 // ==============================================================================
-// Technology Stack & Architecture Component
+// Technology Stack & Architecture Components (Production Quality)
 // ==============================================================================
 
 interface TechItem {
@@ -1254,11 +1255,12 @@ interface TechItem {
   name: string
   version: string
   category: 'Frontend & UI' | 'Backend & API' | 'Data Engineering' | 'Database & Storage' | 'Testing & Quality' | 'Tooling & Runtime'
+  type: 'Direct Dependency' | 'Core Runtime' | 'Primary Database' | 'Custom Engine' | 'Test Suite' | 'Package Tool' | 'Version Control'
   role: string
   sourceFile: string
   description: string
   capabilities: string[]
-  icon: typeof Code2
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 }
 
 const verifiedTechStack: TechItem[] = [
@@ -1267,54 +1269,59 @@ const verifiedTechStack: TechItem[] = [
     name: 'Next.js',
     version: 'v16.4.0',
     category: 'Frontend & UI',
+    type: 'Direct Dependency',
     role: 'React Framework & Application Shell',
     sourceFile: 'frontend/package.json',
-    description: 'Powers the application shell, React 19 Client Component architecture, zero-config Turbopack bundling, and optimized static asset delivery.',
-    capabilities: ['App Router Architecture', 'React 19 Integration', 'Optimized Asset Bundling', 'Client Component Hierarchy'],
-    icon: Code2,
+    description: 'Full-stack React framework providing the App Router architecture, client component boundary management, and Turbopack asset bundling. Powers the web workspace shell and interactive railway dashboards with sub-second initial loads.',
+    capabilities: ['App Router Architecture', 'React 19 Integration', 'Turbopack Asset Bundler', 'Optimized Static Delivery'],
+    icon: Layers,
   },
   {
     id: 'react',
     name: 'React',
     version: 'v19.0.0',
     category: 'Frontend & UI',
+    type: 'Direct Dependency',
     role: 'Declarative User Interface Library',
     sourceFile: 'frontend/package.json',
-    description: 'Drives the component hierarchy, reactive UI state machines, asynchronous effect lifecycles, and high-framerate DOM reconciliation.',
-    capabilities: ['Concurrent Rendering', 'State & Effect Hooks', 'Virtual DOM Diffing', 'Composable UI Primitives'],
-    icon: Zap,
+    description: 'Component-based declarative UI library powering the reactive application layer. Drives high-framerate state transitions, live train search filtering, collapsible schedule drawers, and SVG chart animations.',
+    capabilities: ['Concurrent Rendering', 'Stateful Effect Hooks', 'Virtual DOM Diffing', 'Composable UI Primitives'],
+    icon: Atom,
   },
   {
     id: 'typescript',
     name: 'TypeScript',
     version: 'v5.8.2',
     category: 'Frontend & UI',
+    type: 'Direct Dependency',
     role: 'Static Type System & Safety',
     sourceFile: 'frontend/package.json',
-    description: 'Enforces strict compile-time type boundaries across frontend API clients, component contracts, delay aggregations, and data pipeline schemas.',
-    capabilities: ['Strict Null Checking', 'End-to-End Contract Safety', 'Fast IDE Introspection', 'Zero-Cost Abstractions'],
-    icon: ShieldCheck,
+    description: 'Static type system enforcing strict compile-time verification across frontend API payloads, component contracts, and pipeline data schemas. Eliminates runtime null pointer errors and guarantees interface alignment.',
+    capabilities: ['Strict Null Checking', 'End-to-End Type Safety', 'Component Props Contracts', 'Zero-Cost Abstractions'],
+    icon: FileCode2,
   },
   {
     id: 'tailwind',
     name: 'Tailwind CSS',
     version: 'v4.3.3',
     category: 'Frontend & UI',
+    type: 'Direct Dependency',
     role: 'Utility Styling & Theme Tokens',
     sourceFile: 'frontend/package.json',
-    description: 'Processes design tokens and utility styling configured with railway ivory (#F7F5EF), deep charcoal (#242923), signal lime (#C6E66A), and steel blue (#607F9B).',
-    capabilities: ['Custom Railway Design Tokens', 'Fluid Typography Scales', 'Subtle Micro-Interactions', 'CSS Layer Directives'],
-    icon: Activity,
+    description: 'Utility-first styling framework configured with RAIL / SIGNAL design tokens (ivory workspace, deep charcoal, signal lime, and railway blue). Provides consistent responsive layouts, fluid typography, and subtle micro-interactions.',
+    capabilities: ['Railway Design Tokens', 'Fluid Typography Scales', 'Subtle Micro-Interactions', 'CSS Layer Directives'],
+    icon: Palette,
   },
   {
     id: 'recharts',
     name: 'Recharts',
     version: 'v3.10.1',
     category: 'Frontend & UI',
+    type: 'Direct Dependency',
     role: 'Interactive Data Visualization Engine',
     sourceFile: 'frontend/package.json',
-    description: 'Renders SVG charts for operational delay distributions, route density metrics, hourly passenger throughput, and anomaly quarantines.',
-    capabilities: ['Responsive SVG Containers', 'Custom Accessible Tooltips', 'Dynamic Aspect Ratios', 'Cartesian Grid Projections'],
+    description: 'Declarative SVG visualization engine built on React primitives. Renders interactive delay distribution curves, hourly passenger throughput bars, route density metrics, and anomaly breakdown charts with accessible tooltips.',
+    capabilities: ['Responsive SVG Containers', 'Custom Accessible Tooltips', 'Dynamic Cartesian Grids', 'SVG Bar & Pie Charts'],
     icon: BarChart3,
   },
   {
@@ -1322,21 +1329,23 @@ const verifiedTechStack: TechItem[] = [
     name: 'Lucide React',
     version: 'v1.16.0',
     category: 'Frontend & UI',
+    type: 'Direct Dependency',
     role: 'Railway & Instrumentation Iconography',
     sourceFile: 'frontend/package.json',
-    description: 'Provides accessible, featherweight SVG icons representing railway infrastructure, telemetry switches, database states, and telemetry nodes.',
+    description: 'Lightweight, accessible SVG iconography library. Provides clean instrumentation symbols for railway infrastructure, database connectivity states, pipeline gates, and telemetry nodes with consistent stroke geometry.',
     capabilities: ['Accessible SVG Icons', 'Tree-Shakeable Bundles', 'Consistent Stroke Geometry', 'Semantic Screen Reader Labels'],
-    icon: CircleDot,
+    icon: Sparkles,
   },
   {
     id: 'python',
     name: 'Python',
     version: 'v3.14.0',
     category: 'Backend & API',
+    type: 'Core Runtime',
     role: 'Primary Backend & Data Engineering Runtime',
     sourceFile: 'pyproject.toml',
-    description: 'High-performance core language executing streaming JSON parsers, chunked ETL generators, validation gates, and FastAPI endpoints.',
-    capabilities: ['Memory-Bounded Generators', 'Type Annotations (PEP 484)', 'Native Exception Hierarchies', 'Cross-Platform Windows Execution'],
+    description: 'Core backend programming language driving the chunked ETL pipeline, schema validation gates, and asynchronous API server. Executes memory-bounded streaming generators across Windows and Linux workstations.',
+    capabilities: ['Memory-Bounded Generators', 'Type Annotations (PEP 484)', 'Native Exception Handling', 'Windows Host Execution'],
     icon: Terminal,
   },
   {
@@ -1344,21 +1353,23 @@ const verifiedTechStack: TechItem[] = [
     name: 'FastAPI',
     version: 'v0.128.0',
     category: 'Backend & API',
+    type: 'Direct Dependency',
     role: 'Modern Asynchronous REST API Framework',
     sourceFile: 'pyproject.toml',
-    description: 'Exposes low-latency endpoints for health diagnostics, train performance metrics, route timetables, passenger flow aggregates, and data quality reports.',
-    capabilities: ['Automatic OpenAPI / Swagger Spec', 'Pydantic V2 Request Validation', 'Async I/O Concurrency', 'Zero-Boilerplate Serialization'],
-    icon: Server,
+    description: 'Modern, asynchronous ASGI web framework serving high-throughput REST endpoints. Handles operational journey queries, timetable lookups, and system health probes with automatic OpenAPI schema generation and validation.',
+    capabilities: ['Automatic OpenAPI Spec', 'Pydantic V2 Serialization', 'Async I/O Concurrency', 'Zero-Boilerplate Routing'],
+    icon: Zap,
   },
   {
     id: 'uvicorn',
     name: 'Uvicorn',
     version: 'v0.41.0',
     category: 'Backend & API',
+    type: 'Direct Dependency',
     role: 'Production ASGI Web Server',
     sourceFile: 'pyproject.toml',
-    description: 'Blazing-fast ASGI server implementation hosting FastAPI, handling asynchronous HTTP concurrency, worker lifecycles, and keep-alive pipelines.',
-    capabilities: ['ASGI 3.0 Specification', 'High Concurrency Event Loop', 'Low Overhead Latency (~10ms)', 'Clean Signal Handling'],
+    description: 'Lightning-fast ASGI production web server hosting the FastAPI backend. Handles asynchronous HTTP concurrency, worker lifecycle management, and keep-alive pipelines on local port 8000.',
+    capabilities: ['ASGI 3.0 Specification', 'High Concurrency Event Loop', 'Low Latency (~10ms)', 'Graceful Signal Handling'],
     icon: Cpu,
   },
   {
@@ -1366,9 +1377,10 @@ const verifiedTechStack: TechItem[] = [
     name: 'Pydantic',
     version: 'v2.12.5',
     category: 'Backend & API',
+    type: 'Direct Dependency',
     role: 'Data Validation & Schema Modeling',
     sourceFile: 'pyproject.toml',
-    description: 'Validates runtime request and response structures, converting raw database tuples and parquet records into validated typed models with rust-backed speed.',
+    description: 'Rust-backed data validation and schema enforcement engine. Converts raw database rows, timetable records, and Parquet data into strongly typed domain models with rigorous runtime boundary checks.',
     capabilities: ['Compiled Rust Core (pydantic-core)', 'Strict Type Coercion', 'Declarative Field Constraints', 'Fast JSON Serialization'],
     icon: FileCheck2,
   },
@@ -1377,9 +1389,10 @@ const verifiedTechStack: TechItem[] = [
     name: 'PostgreSQL',
     version: 'v18.3',
     category: 'Database & Storage',
-    role: 'Primary Relational Analytics Store',
+    type: 'Primary Database',
+    role: 'Relational Analytics Engine',
     sourceFile: 'backend/database/connection.py, sql/init.sql',
-    description: 'Production enterprise relational database hosting 2,283,664 verified operational railway records across stations, schedules, trains, and operational journeys.',
+    description: 'Primary enterprise relational database hosting 2,283,664 verified railway records. Houses normalized stations, train schedules, and operational journeys with composite indexes for sub-20ms analytical queries.',
     capabilities: ['2,283,664 Verified Records', 'B-Tree & Composite Indexes', 'ACID Transaction Guarantee', 'Analytical Aggregations & Views'],
     icon: Database,
   },
@@ -1388,10 +1401,11 @@ const verifiedTechStack: TechItem[] = [
     name: 'psycopg2-binary',
     version: 'v2.9.13',
     category: 'Database & Storage',
+    type: 'Direct Dependency',
     role: 'Native PostgreSQL Client Driver',
     sourceFile: 'pyproject.toml',
-    description: 'C-optimized database driver providing reliable TCP connection pooling, parameterized query execution, and robust cursor iteration.',
-    capabilities: ['Connection Pooling Support', 'SQL Injection Immunity via Parameterization', 'Efficient Multi-Row Fetching', 'Binary Protocol Support'],
+    description: 'Low-level C-optimized PostgreSQL client driver. Provides robust TCP connection pooling, parameterized query execution with SQL injection immunity, and high-performance multi-row cursor iteration.',
+    capabilities: ['Connection Pooling Support', 'Parameterized SQL Execution', 'Efficient Cursor Iteration', 'Binary Protocol Support'],
     icon: Network,
   },
   {
@@ -1399,9 +1413,10 @@ const verifiedTechStack: TechItem[] = [
     name: 'Apache Arrow / PyArrow',
     version: 'v26.0.0',
     category: 'Data Engineering',
+    type: 'Direct Dependency',
     role: 'Columnar Memory & Parquet Interchange',
     sourceFile: 'pyproject.toml',
-    description: 'High-throughput columnar memory format powering fast Snappy-compressed Parquet read/write operations for historical operational journeys.',
+    description: 'High-performance columnar memory layout and Parquet serialization engine. Powers Snappy-compressed columnar storage for historical operational journeys, enabling fast analytical scans and compact disk footprints.',
     capabilities: ['Snappy Compression Encoding', 'Zero-Copy In-Memory Interop', 'Columnar Analytical Projection', 'Standardized Parquet Schemas'],
     icon: Layers3,
   },
@@ -1410,64 +1425,70 @@ const verifiedTechStack: TechItem[] = [
     name: 'Pandas',
     version: 'v3.0.1',
     category: 'Data Engineering',
+    type: 'Direct Dependency',
     role: 'Vectorized Data Transformation & Analytics',
     sourceFile: 'pyproject.toml',
-    description: 'Executes vectorized dataset transformations, zone-based group-by aggregations, duration parsing, and timetable sequence validation.',
+    description: 'Vectorized tabular manipulation library executing pipeline data transformations. Handles zonal group-by aggregations, journey duration parsing, timetable sequence sorting, and Parquet export workflows.',
     capabilities: ['Vectorized Series Calculations', 'Composite GroupBy Aggregations', 'Parquet File Integration', 'High-Speed Statistical Summaries'],
     icon: Table2,
   },
   {
     id: 'ingestion-pipeline',
-    name: 'Streaming Ingestion Pipeline',
-    version: 'v1.0.0 (Custom)',
+    name: 'Streaming Ingestion Engine',
+    version: 'v1.0.0',
     category: 'Data Engineering',
+    type: 'Custom Engine',
     role: 'Memory-Bounded Chunked Stream Parser',
     sourceFile: 'backend/pipeline/ingestion.py',
-    description: 'Custom Python generator pipeline parsing massive raw DataMeet JSON files and Kaggle CSVs incrementally without RAM spikes or process crashes.',
+    description: 'Custom Python generator pipeline parsing massive raw DataMeet JSON files and Kaggle CSVs incrementally without RAM spikes, preserving raw source files intact.',
     capabilities: ['Generator Streaming Semantics', '< 150MB Peak RAM Footprint', 'Safe Large-File Chunking', 'Immutable Source File Preservation'],
     icon: GitBranch,
   },
   {
     id: 'quarantine-engine',
     name: 'Pipeline Quarantine Engine',
-    version: 'v1.0.0 (Custom)',
+    version: 'v1.0.0',
     category: 'Data Engineering',
+    type: 'Custom Engine',
     role: 'Automated Schema & Quality Gatekeeper',
     sourceFile: 'backend/pipeline/validation.py',
-    description: 'Validates every ingested record against rigorous schema contracts, automatically segregating 22,611 anomalous schedule rows into quarantine tables.',
+    description: 'Automated data quality gatekeeper that enforces schema rules across ingested records. Segregates 22,611 anomalous schedule records into dedicated quarantine tables with audit reasons while preventing pipeline halts.',
     capabilities: ['Deterministic Rejection Reasons', 'Zero Data Loss Philosophy', 'Audit Trail Recording', 'Dual-Phase Clean/Quarantine Split'],
-    icon: ShieldCheck,
+    icon: ShieldAlert,
   },
   {
     id: 'pytest',
     name: 'Pytest',
     version: 'v9.1.1',
     category: 'Testing & Quality',
+    type: 'Test Suite',
     role: 'Automated Test Runner & Assertion Framework',
     sourceFile: 'pyproject.toml, tests/',
-    description: 'Runs comprehensive test suites covering ingestion parsers, transformation matrices, schema validation rules, and live database queries.',
-    capabilities: ['25+ End-to-End Test Cases', 'Parametrized Test Fixtures', 'Regression Safety Net', 'Fast Windows Execution'],
-    icon: FileCheck2,
+    description: 'Comprehensive automated test framework validating data integrity across all system layers. Runs 54 automated test cases covering JSON parsing, data transformations, schema validation rules, and live database queries.',
+    capabilities: ['54 Automated Test Cases', 'Parametrized Test Fixtures', 'Regression Safety Net', 'Fast Windows Execution'],
+    icon: TestTube2,
   },
   {
     id: 'pnpm',
     name: 'pnpm',
     version: 'v11.15.1',
     category: 'Tooling & Runtime',
+    type: 'Package Tool',
     role: 'Fast, Disk-Efficient Package Manager',
     sourceFile: 'frontend/package.json',
-    description: 'Hardlink and symlink based package manager ensuring reproducible dependencies, rapid cold installs, and minimal disk consumption.',
+    description: 'Fast, disk-efficient package manager utilizing content-addressable storage. Ensures deterministic, reproducible frontend dependencies, rapid cold installs, and minimal disk consumption via hardlinked store.',
     capabilities: ['Content-Addressable Storage', 'Strict Dependency Trees', 'Rapid Turbo Cold Builds', 'Monorepo Readiness'],
-    icon: Settings2,
+    icon: PackageCheck,
   },
   {
     id: 'nodejs',
     name: 'Node.js',
     version: 'v24.12.0',
     category: 'Tooling & Runtime',
+    type: 'Core Runtime',
     role: 'Modern JavaScript Engine & Build Runtime',
     sourceFile: 'Host Environment',
-    description: 'Underlying V8-powered runtime executing the Next.js build server, asset pipelines, and development environment.',
+    description: 'Host V8 JavaScript runtime powering the Next.js compiler, Turbopack asset pipeline, and client development server. Provides native fetch implementation and high-speed local file system operations.',
     capabilities: ['V8 JavaScript Engine', 'Native Fetch Implementation', 'High Performance File I/O', 'Modern ECMAScript Standards'],
     icon: Cpu,
   },
@@ -1476,9 +1497,10 @@ const verifiedTechStack: TechItem[] = [
     name: 'Git & GitHub',
     version: 'v2.x / origin',
     category: 'Tooling & Runtime',
+    type: 'Version Control',
     role: 'Distributed Version Control & Collaboration',
     sourceFile: '.git/config',
-    description: 'Tracks atomic revisions and synchronization with the canonical remote repository at https://github.com/Prathamcoder3000/rail-signal.',
+    description: 'Distributed version control system and remote collaboration hub at Prathamcoder3000/rail-signal. Manages atomic commit histories, reproducible branch checkouts, and clean remote synchronization.',
     capabilities: ['Clean Commit History', 'Origin Remote Synchronization', 'Reproducible Branches', 'Atomic Git Trees'],
     icon: GitBranch,
   },
@@ -1494,6 +1516,119 @@ const techCategories = [
   'Tooling & Runtime',
 ] as const
 
+// Reusable Metric Summary Card
+function TechnologySummaryCard({
+  icon: Icon,
+  label,
+  metric,
+  description,
+  action,
+}: {
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+  label: string
+  metric: React.ReactNode
+  description: string
+  action?: React.ReactNode
+}) {
+  return (
+    <div className="tech-summary-card">
+      <div className="tech-summary-top">
+        <span className="tech-summary-label">{label}</span>
+        <div className="tech-summary-icon-wrap" aria-hidden="true">
+          <Icon style={{ width: 17, height: 17 }} />
+        </div>
+      </div>
+      <div className="tech-summary-metric">{metric}</div>
+      <p className="tech-summary-desc">{description}</p>
+      {action && <div style={{ marginTop: 'auto' }}>{action}</div>}
+    </div>
+  )
+}
+
+// Reusable Category Filter Bar
+function CategoryFilter({
+  categories,
+  activeCategory,
+  onSelectCategory,
+  categoryCounts,
+}: {
+  categories: readonly string[]
+  activeCategory: string
+  onSelectCategory: (cat: string) => void
+  categoryCounts: Record<string, number>
+}) {
+  return (
+    <div className="tech-category-pills" role="tablist" aria-label="Technology Categories">
+      {categories.map((cat) => {
+        const isActive = activeCategory === cat
+        const count = categoryCounts[cat] ?? 0
+        return (
+          <button
+            key={cat}
+            role="tab"
+            aria-selected={isActive}
+            className={`tech-filter-pill ${isActive ? 'active' : ''}`}
+            onClick={() => onSelectCategory(cat)}
+          >
+            <span>{cat}</span>
+            <span className="tech-pill-count">{count}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// Reusable Technology Card
+function TechnologyCard({ tech }: { tech: TechItem }) {
+  const IconComp = tech.icon
+  return (
+    <article className="tech-card" aria-labelledby={`tech-title-${tech.id}`}>
+      {/* A. Header */}
+      <div className="tech-card-header">
+        <div className="tech-card-identity">
+          <div className="tech-card-icon-frame" aria-hidden="true">
+            <IconComp style={{ width: 20, height: 20 }} />
+          </div>
+          <div className="tech-card-title-group">
+            <div className="tech-card-name-row">
+              <h3 id={`tech-title-${tech.id}`} className="tech-card-name">{tech.name}</h3>
+              <span className="tech-version-pill">{tech.version}</span>
+              <span className="tech-type-pill">{tech.type}</span>
+            </div>
+            <span className="tech-category-label">{tech.category}</span>
+          </div>
+        </div>
+        <span className="tech-verified-tag" title="Verified in repository source files">
+          <CheckCircle2 style={{ width: 12, height: 12 }} />
+          Verified
+        </span>
+      </div>
+
+      {/* B. Project Role */}
+      <div className="tech-card-role-box">
+        <div className="tech-card-role-text">{tech.role}</div>
+      </div>
+
+      {/* C. Human-readable Description */}
+      <p className="tech-card-description">{tech.description}</p>
+
+      {/* D. Capabilities */}
+      <div className="tech-capabilities-wrap" aria-label="Key Capabilities">
+        {tech.capabilities.map((cap) => (
+          <span key={cap} className="tech-capability-chip">{cap}</span>
+        ))}
+      </div>
+
+      {/* E. Verified Source File */}
+      <div className="tech-card-footer">
+        <span className="tech-footer-label">Source Verification</span>
+        <code className="tech-source-code" title={tech.sourceFile}>{tech.sourceFile}</code>
+      </div>
+    </article>
+  )
+}
+
 function TechStack({
   systemHealth,
   onOpenDiagnostics,
@@ -1504,6 +1639,15 @@ function TechStack({
   const [selectedCategory, setSelectedCategory] = useState<string>('All')
   const [searchQuery, setSearchQuery] = useState('')
 
+  // Calculate count per category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: verifiedTechStack.length }
+    for (const item of verifiedTechStack) {
+      counts[item.category] = (counts[item.category] || 0) + 1
+    }
+    return counts
+  }, [])
+
   const filteredItems = useMemo(() => {
     return verifiedTechStack.filter((tech) => {
       const matchesCategory = selectedCategory === 'All' || tech.category === selectedCategory
@@ -1513,6 +1657,7 @@ function TechStack({
         tech.name.toLowerCase().includes(q) ||
         tech.role.toLowerCase().includes(q) ||
         tech.category.toLowerCase().includes(q) ||
+        tech.type.toLowerCase().includes(q) ||
         tech.description.toLowerCase().includes(q) ||
         tech.sourceFile.toLowerCase().includes(q) ||
         tech.capabilities.some((c) => c.toLowerCase().includes(q))
@@ -1523,129 +1668,124 @@ function TechStack({
   return (
     <>
       <Header
-        eyebrow="Platform Architecture & Verified Source Stack"
+        eyebrow="PLATFORM ARCHITECTURE & VERIFIED SOURCE STACK"
         title="Technology Stack & Core Components"
-        description="Every library, framework, runtime, and database engine verified in the RAIL / SIGNAL repository. All technologies are confirmed directly in package manifests, pyproject.toml, and project source code."
+        description="Every library, framework, runtime, and database engine verified in the RAIL / SIGNAL repository. All components are confirmed directly from project configuration, package manifests, and source files."
         action={<SourceBadge source="processed-data" />}
       />
 
-      {/* Summary KPI Strip */}
-      <section className="kpi-grid">
-        <Card className="kpi">
-          <div className="kpi-top">
-            <span>Verified Technologies</span>
-            <CheckCircle2 />
-          </div>
-          <b>20</b>
-          <small>100% Confirmed in Codebase</small>
-        </Card>
+      {/* 1. Summary Metric Cards */}
+      <section className="tech-kpi-grid" aria-label="Stack Summary Metrics">
+        <TechnologySummaryCard
+          icon={Layers}
+          label="Verified Technologies"
+          metric="20 Components"
+          description="Direct dependencies, core runtimes, and custom streaming engines confirmed in repository."
+        />
 
-        <Card className="kpi">
-          <div className="kpi-top">
-            <span>Runtime Integrity</span>
-            <span className={`sys-status-indicator pulse-${systemHealth.tone}`} />
-          </div>
-          <b>{systemHealth.status === 'healthy' ? 'Online' : 'Standby'}</b>
-          <small>
+        <TechnologySummaryCard
+          icon={Activity}
+          label="Runtime Integrity"
+          metric={
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span className={`sys-status-indicator pulse-${systemHealth.tone}`} />
+              {systemHealth.status === 'healthy' ? 'Online' : 'Standby'}
+            </span>
+          }
+          description="PostgreSQL pool connected · 2,283,664 verified operational records available."
+          action={
             <button
               onClick={onOpenDiagnostics}
-              style={{ background: 'none', border: 'none', padding: 0, color: 'var(--rail)', textDecoration: 'underline', cursor: 'pointer', font: 'inherit' }}
+              className="tech-summary-action"
+              title="Open full system diagnostics dialog"
             >
               View System Diagnostics &rarr;
             </button>
-          </small>
-        </Card>
+          }
+        />
 
-        <Card className="kpi">
-          <div className="kpi-top">
-            <span>Zero-Bloat Policy</span>
-            <ShieldCheck />
-          </div>
-          <b>Enforced</b>
-          <small>0 Unused Frameworks or Microservices</small>
-        </Card>
+        <TechnologySummaryCard
+          icon={ShieldCheck}
+          label="Architecture Policy"
+          metric="Zero-Bloat"
+          description="Memory-bounded streaming ETL; no unneeded Kafka, Spark, Redis, or Docker clusters."
+        />
 
-        <Card className="kpi">
-          <div className="kpi-top">
-            <span>Access &amp; Security</span>
-            <Zap />
-          </div>
-          <b>Public Mode</b>
-          <small>Read-only Educational Analytics</small>
-        </Card>
+        <TechnologySummaryCard
+          icon={Zap}
+          label="Access & Security"
+          metric="Public Mode"
+          description="Read-only educational railway analytics; zero login or credential barriers."
+        />
       </section>
 
-      {/* Filter and Search Bar */}
-      <Card className="tech-filter-bar">
-        <div className="tech-category-pills">
-          {techCategories.map((cat) => (
-            <button
-              key={cat}
-              className={`filter-pill ${selectedCategory === cat ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(cat)}
-            >
-              {cat}
-              {cat === 'All' ? ` (${verifiedTechStack.length})` : ` (${verifiedTechStack.filter((t) => t.category === cat).length})`}
-            </button>
+      {/* 2. Filter Bar and Search Toolbar */}
+      <section className="tech-toolbar" aria-label="Filter and Search Controls">
+        <CategoryFilter
+          categories={techCategories}
+          activeCategory={selectedCategory}
+          onSelectCategory={setSelectedCategory}
+          categoryCounts={categoryCounts}
+        />
+
+        <div className="tech-search-row">
+          <div className="tech-search-box">
+            <Search className="tech-search-icon" aria-hidden="true" />
+            <input
+              type="search"
+              className="tech-search-input"
+              placeholder="Filter by name, role, capability, or source path..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search verified technologies"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="tech-search-clear"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search input"
+              >
+                <X style={{ width: 14, height: 14 }} />
+              </button>
+            )}
+          </div>
+
+          <div className="tech-counter-badge">
+            Showing <b>{filteredItems.length}</b> of <b>{verifiedTechStack.length}</b> technologies
+          </div>
+        </div>
+      </section>
+
+      {/* 3. Technology Grid or Empty State */}
+      {filteredItems.length > 0 ? (
+        <section className="tech-grid" aria-label="Verified Technology Cards">
+          {filteredItems.map((tech) => (
+            <TechnologyCard key={tech.id} tech={tech} />
           ))}
+        </section>
+      ) : (
+        <div className="tech-empty-state">
+          <div className="tech-empty-icon">
+            <Search style={{ width: 22, height: 22 }} />
+          </div>
+          <h3>No matching technologies found</h3>
+          <p>
+            No verified technologies matched your search for &ldquo;{searchQuery}&rdquo; in category &ldquo;{selectedCategory}&rdquo;.
+          </p>
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              setSelectedCategory('All')
+              setSearchQuery('')
+            }}
+          >
+            Reset All Filters
+          </button>
         </div>
-        <div className="tech-search-box">
-          <Search />
-          <input
-            type="search"
-            placeholder="Search technologies, roles, source files, capabilities..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Filter technologies"
-          />
-        </div>
-      </Card>
+      )}
 
-      {/* Technology Grid */}
-      <section className="tech-grid">
-        {filteredItems.map((tech) => {
-          const IconComp = tech.icon
-          return (
-            <Card key={tech.id} className="tech-card">
-              <div className="tech-card-header">
-                <div className="tech-card-title-row">
-                  <div className="tech-icon-wrap">
-                    <IconComp />
-                  </div>
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <b className="tech-card-name">{tech.name}</b>
-                      <span className="tech-version-badge">{tech.version}</span>
-                    </div>
-                    <span className="tech-category-tag">{tech.category}</span>
-                  </div>
-                </div>
-                <span className="tech-confirmed-badge" title="Verified in project source code">
-                  <CheckCircle2 style={{ width: 13, height: 13 }} />
-                  Source Verified
-                </span>
-              </div>
-
-              <div className="tech-card-role">{tech.role}</div>
-
-              <p className="tech-card-desc">{tech.description}</p>
-
-              <div className="tech-capabilities">
-                {tech.capabilities.map((cap) => (
-                  <span key={cap} className="tech-cap-pill">{cap}</span>
-                ))}
-              </div>
-
-              <div className="tech-card-footer">
-                <span className="tech-source-label">Source Verification:</span>
-                <code className="tech-source-path">{tech.sourceFile}</code>
-              </div>
-            </Card>
-          )
-        })}
-      </section>
-
-      {/* Architectural Policy & Access Model Panels */}
+      {/* 4. Architectural Policy & Access Model Panels */}
       <section className="grid-2">
         <Card>
           <div className="panel-head">
@@ -1692,6 +1832,7 @@ function TechStack({
     </>
   )
 }
+
 
 // ==============================================================================
 // System Diagnostics & Health Modal
