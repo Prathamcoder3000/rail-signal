@@ -1864,78 +1864,125 @@ function SystemDiagnosticsModal({
       >
         <div className="sys-modal-head">
           <div className="sys-modal-title-group">
-            <Activity style={{ color: 'var(--charcoal)', width: 20, height: 20 }} />
-            <b id="sys-modal-title" style={{ fontSize: 16 }}>System Health &amp; Diagnostics</b>
+            <div className="sys-modal-icon-badge" aria-hidden="true">
+              <Activity style={{ width: 16, height: 16 }} />
+            </div>
+            <div>
+              <h2 id="sys-modal-title" className="sys-modal-title">System Health &amp; Diagnostics</h2>
+              <span className="sys-modal-subtitle">Service telemetry, connectivity &amp; runtime specification</span>
+            </div>
           </div>
-          <button className="sys-modal-close" onClick={onClose} aria-label="Close diagnostics dialog">
-            <X />
+          <button
+            type="button"
+            className="sys-modal-close"
+            onClick={onClose}
+            aria-label="Close diagnostics dialog"
+            title="Close dialog (Esc)"
+          >
+            <X style={{ width: 16, height: 16 }} />
           </button>
         </div>
 
         <div className="sys-modal-body">
-          {/* Status banner */}
-          <div className={`sys-modal-banner banner-${health.tone}`}>
-            <span className={`sys-status-indicator pulse-${health.tone}`} style={{ width: 14, height: 14 }} />
-            <div style={{ flex: 1 }}>
-              <b style={{ display: 'block', fontSize: 15, marginBottom: 2 }}>{health.label}</b>
-              <span style={{ fontSize: 13, opacity: 0.9 }}>{health.details}</span>
+          {/* Primary Status Card */}
+          <div className={`sys-status-banner banner-${health.tone}`}>
+            <div className="sys-banner-indicator-wrap" aria-hidden="true">
+              <span className={`sys-status-indicator pulse-${health.tone}`} />
             </div>
-            {health.latencyMs !== null && (
-              <span className="sys-latency-tag">{health.latencyMs} ms</span>
-            )}
-          </div>
-
-          {/* Diagnostic Key-Value Table */}
-          <div className="sys-diag-matrix">
-            <div className="sys-diag-row">
-              <span>Backend API URL</span>
-              <code>{API_BASE_URL}</code>
-            </div>
-            <div className="sys-diag-row">
-              <span>Health Endpoint</span>
-              <code>GET /api/health</code>
-            </div>
-            <div className="sys-diag-row">
-              <span>PostgreSQL Service</span>
-              <b>{health.database ? health.database.toUpperCase() : 'DISCONNECTED'}</b>
-            </div>
-            <div className="sys-diag-row">
-              <span>Verified Database Records</span>
-              <b>2,283,664 verified rows</b>
-            </div>
-            <div className="sys-diag-row">
-              <span>Client Framework</span>
-              <span>Next.js 16.4.0 / React 19.0.0</span>
-            </div>
-            <div className="sys-diag-row">
-              <span>Last Diagnostic Probe</span>
-              <span>{health.checkedAt}</span>
-            </div>
-          </div>
-
-          {/* Offline Recovery Guidance */}
-          {(health.status === 'backend_offline' || health.status === 'check_failed') && (
-            <div className="sys-offline-guide">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#8f2020', marginBottom: 6 }}>
-                <AlertTriangle style={{ width: 16, height: 16 }} />
-                Backend Server is Not Running
+            <div className="sys-banner-content">
+              <div className="sys-banner-title-row">
+                <span className="sys-banner-label">{health.label}</span>
+                {health.latencyMs !== null && (
+                  <span className="sys-latency-tag">{health.latencyMs} ms latency</span>
+                )}
               </div>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12.5, color: '#5e1919', lineHeight: 1.5 }}>
-                The frontend is operating in standalone mode with cached baseline datasets. To connect live PostgreSQL analytics, start the FastAPI server in your terminal:
+              <p className="sys-banner-summary">{health.details || health.headline}</p>
+            </div>
+          </div>
+
+          {/* Diagnostic Key-Value Details */}
+          <div className="sys-diag-section">
+            <div className="sys-section-title">Diagnostic Telemetry &amp; Specs</div>
+            <dl className="sys-diag-list">
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">Response Latency</dt>
+                <dd className="sys-diag-val">
+                  {health.latencyMs !== null ? `${health.latencyMs} ms (round-trip)` : '— (offline probe)'}
+                </dd>
+              </div>
+
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">Backend API URL</dt>
+                <dd className="sys-diag-val sys-code-val">
+                  <code>{API_BASE_URL}</code>
+                </dd>
+              </div>
+
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">Health Endpoint</dt>
+                <dd className="sys-diag-val sys-code-val">
+                  <code>GET /api/health</code>
+                </dd>
+              </div>
+
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">PostgreSQL Connection</dt>
+                <dd className="sys-diag-val">
+                  <span className={`sys-badge badge-${health.database === 'connected' ? 'connected' : 'disconnected'}`}>
+                    <span className="badge-dot" />
+                    {health.database ? health.database.toUpperCase() : 'DISCONNECTED'}
+                  </span>
+                </dd>
+              </div>
+
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">Verified DB Records</dt>
+                <dd className="sys-diag-val sys-num-val">
+                  <b>2,283,664</b>
+                  <span>verified rows in rail_signal</span>
+                </dd>
+              </div>
+
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">Runtime / Frameworks</dt>
+                <dd className="sys-diag-val">
+                  Next.js 16.4.0 · React 19.0.0 · FastAPI
+                </dd>
+              </div>
+
+              <div className="sys-diag-item">
+                <dt className="sys-diag-label">Last Diagnostic Probe</dt>
+                <dd className="sys-diag-val">
+                  {health.checkedAt || 'Probe in progress'}
+                </dd>
+              </div>
+            </dl>
+          </div>
+
+          {/* Offline Recovery Guidance if Backend is down */}
+          {(health.status === 'backend_offline' || health.status === 'check_failed') && (
+            <div className="sys-recovery-box recovery-error">
+              <div className="sys-recovery-head">
+                <AlertTriangle style={{ width: 16, height: 16 }} />
+                <span>Backend Server is Not Running</span>
+              </div>
+              <p className="sys-recovery-text">
+                The frontend is operating in standalone mode. To connect live PostgreSQL analytics, start the FastAPI backend service:
               </p>
-              <pre className="sys-code-snippet">
+              <pre className="sys-recovery-snippet">
                 python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
               </pre>
             </div>
           )}
 
+          {/* Offline Recovery Guidance if Database is disconnected */}
           {health.status === 'db_disconnected' && (
-            <div className="sys-offline-guide" style={{ background: '#fdf8e6', borderColor: '#ecd992' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#8a6200', marginBottom: 6 }}>
+            <div className="sys-recovery-box recovery-warn">
+              <div className="sys-recovery-head">
                 <AlertTriangle style={{ width: 16, height: 16 }} />
-                PostgreSQL Unreachable
+                <span>PostgreSQL Service Unreachable</span>
               </div>
-              <p style={{ margin: '0 0 8px 0', fontSize: 12.5, color: '#664900', lineHeight: 1.5 }}>
+              <p className="sys-recovery-text">
                 The FastAPI backend is operational, but cannot connect to PostgreSQL on port 5432. Please ensure the PostgreSQL service is active and the database <code>rail_signal</code> is accessible.
               </p>
             </div>
@@ -1944,15 +1991,19 @@ function SystemDiagnosticsModal({
 
         <div className="sys-modal-foot">
           <button
-            className="btn btn-secondary"
+            type="button"
+            className="sys-btn sys-btn-secondary"
             onClick={onRefresh}
             disabled={isRefreshing}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
-            <RefreshCw className={isRefreshing ? 'spin' : ''} style={{ width: 14, height: 14 }} />
-            {isRefreshing ? 'Checking Health...' : 'Re-test Connection'}
+            <RefreshCw className={isRefreshing ? 'spin' : ''} style={{ width: 13, height: 13 }} />
+            <span>{isRefreshing ? 'Testing Connection...' : 'Re-test Connection'}</span>
           </button>
-          <button className="btn btn-primary" onClick={onClose}>
+          <button
+            type="button"
+            className="sys-btn sys-btn-primary"
+            onClick={onClose}
+          >
             Dismiss
           </button>
         </div>
@@ -2225,7 +2276,10 @@ export default function Page() {
             <button
               type="button"
               className="health-diag-action"
-              onClick={() => setSysModalOpen(true)}
+              onClick={() => {
+                setSysModalOpen(true)
+                setMobileOpen(false)
+              }}
               title="Open system diagnostics & specs dialog"
             >
               <span>Diagnostics &amp; Specs</span>
