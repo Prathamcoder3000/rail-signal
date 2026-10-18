@@ -1,103 +1,126 @@
 # 🚆 RAIL / SIGNAL
 ### Railway Operations & Passenger Flow Data Engineering Platform
 
-RAIL / SIGNAL is a data engineering project designed to process railway-related datasets, validate data quality, store structured information in PostgreSQL, and generate analytical insights into train performance, journey delays, passenger utilisation, and schedule quality.
+RAIL / SIGNAL is an end-to-end data engineering platform designed to process railway-related datasets, validate data quality, store structured information in PostgreSQL, and expose analytical insights through a high-performance FastAPI backend and a Next.js 16 operations dashboard.
 
-The project demonstrates an end-to-end data engineering workflow, from raw data ingestion and transformation to database storage and analytics.
+The system demonstrates a complete data engineering lifecycle: from raw GeoJSON/CSV ingestion, schema validation, and quarantine auditing to columnar Parquet persistence, PostgreSQL relational loading, and dynamic frontend visualisations.
 
-> **Project status:** Phase 3 completed — database integration and SQL analytics. Phase 4 — FastAPI backend — is planned next.
+> **Project status:** **Phases 1–5 Complete & Integrated.** End-to-end pipeline, PostgreSQL database, FastAPI REST service, and Next.js dashboard fully verified.
 
 ---
 
 ## 🎯 Project Objectives
 
-- Build a structured railway data processing pipeline.
-- Ingest and process large railway datasets using Python.
-- Validate data and identify missing or invalid records.
-- Store processed datasets in Parquet format.
-- Load structured data into PostgreSQL.
-- Write SQL queries to analyse train performance, journey delays, passenger utilisation, and schedule quality.
-- Develop a backend API to make analytical data available to a frontend dashboard.
+- **Modular ETL Pipeline:** Ingest, validate, and transform large railway datasets with zero silent row loss.
+- **Data Quality & Quarantine:** Segregate invalid records into dedicated audit logs (`data/processed/quarantine/`) without fabricating values.
+- **Columnar Storage:** Store clean analytical datasets in compressed Parquet format (`data/processed/`).
+- **Relational Analytics:** Load 2,283,664 verified records into PostgreSQL (`rail_signal`) and execute analytical SQL aggregates.
+- **RESTful API:** Expose verified metrics, train searches, delay analytics, and data-quality reports via FastAPI with automatic OpenAPI documentation.
+- **Interactive Dashboard:** Display metrics on a responsive Next.js 16 / React 19 dashboard adhering to the approved visual identity (dark charcoal, warm ivory, signal-lime accent, railway-blue charts).
+
+---
 
 ## 🛠️ Technology Stack
 
-| Technology | Purpose |
-|---|---|
-| Python | Data processing and pipeline development |
-| Pandas | Data cleaning and transformation |
-| PyArrow / Parquet | Efficient columnar data storage |
-| PostgreSQL 18 | Relational database |
-| SQL | Analytical queries |
-| psycopg2 | PostgreSQL connectivity |
-| FastAPI | Planned backend API |
-| React + Vite | Planned frontend |
-| Tailwind CSS | Planned interface styling |
-| Recharts | Planned data visualisations |
-| Pytest | Automated testing |
-| Git & GitHub | Version control |
+| Component | Technology | Purpose |
+|---|---|---|
+| **Data Processing** | Python 3.14, Pandas, PyArrow | Ingestion, validation, transformation, and Parquet storage |
+| **Database** | PostgreSQL 18, psycopg2 | Relational storage, indexing, and SQL analytical queries |
+| **Backend API** | FastAPI, Pydantic v2, Uvicorn | REST API, connection pooling, and request/response validation |
+| **Frontend** | Next.js 16 (Turbopack), React 19, TypeScript | Server and client UI components, routing, and state |
+| **Styling & Charts** | Tailwind CSS 4, Recharts, Lucide Icons | Responsive railway operations interface and visualisations |
+| **Testing & Quality** | Pytest, TypeScript (`tsc --noEmit`) | Automated unit, schema, integration, and build testing |
+| **Version Control** | Git & GitHub | Source tracking and branch management |
 
-## 🏗️ Project Architecture
+---
+
+## 🏗️ System Architecture
 
 ```text
 RAIL / SIGNAL
      |
      v
-Raw Railway Datasets
+Raw Railway Datasets (DataMeet GeoJSON + Kaggle Operational CSVs)
      |
      v
-Data Ingestion
+Data Ingestion Layer (backend/pipeline/ingestion.py)
      |
      v
-Data Validation
+Data Validation Layer (backend/pipeline/validation.py)
+     |
+     +---> Quarantine Store (data/processed/quarantine/)
+     v
+Data Transformation & Parquet Layer (backend/pipeline/transformation.py)
      |
      v
-Data Transformation
+Processed Parquet Files (data/processed/*.parquet)
      |
      v
-Processed Parquet Files
+Database Batch Loader (backend/pipeline/database_loader.py)
      |
      v
-Python Database Loader
+PostgreSQL Relational Database (rail_signal — 2,283,664 rows)
      |
      v
-PostgreSQL Database
+FastAPI Backend API (backend/app/main.py)
      |
      v
-SQL Analytics
-     |
-     v
-FastAPI Backend (Phase 4)
-     |
-     v
-React Dashboard (Planned)
+Next.js Operations Dashboard (frontend/app/page.tsx)
 ```
 
-## 📂 Project Structure
+---
+
+## 📂 Project Organization
 
 ```text
 RAIL-SIGNAL/
 ├── backend/
+│   ├── app/
+│   │   ├── config.py             # App & database configuration settings
+│   │   ├── db.py                 # PostgreSQL connection pool & health checks
+│   │   ├── schemas.py            # Pydantic request and response models
+│   │   ├── services.py           # SQL queries & business logic
+│   │   ├── main.py               # FastAPI application & route declarations
+│   │   └── __init__.py
 │   ├── pipeline/
-│   │   ├── ingestion.py
-│   │   ├── validation.py
-│   │   ├── transformation.py
-│   │   └── database_loader.py
+│   │   ├── ingestion.py          # Memory-safe GeoJSON & chunked CSV ingestion
+│   │   ├── validation.py         # Schema, coordinate bounds, & leakage checks
+│   │   ├── transformation.py     # Data cleaning, quarantine, & Parquet writers
+│   │   ├── database_loader.py    # PostgreSQL batch insertion & row verifier
+│   │   └── __init__.py
 │   └── __init__.py
 ├── data/
 │   ├── raw/
-│   │   ├── datameet/
-│   │   └── kaggle/
-│   ├── processed/
-│   └── quarantine/
+│   │   ├── datameet/             # stations.json, trains.json, schedules.json
+│   │   └── operational_journeys/ # ir_train.csv, ir_test.csv, dictionaries
+│   └── processed/
+│       ├── stations.parquet      # 8,988 rows
+│       ├── trains.parquet        # 5,207 rows
+│       ├── schedules.parquet     # 394,469 rows
+│       ├── journey_train.parquet # 1,500,000 rows
+│       ├── journey_test.parquet  # 375,000 rows
+│       ├── quality_report.json   # Pipeline execution metadata
+│       └── quarantine/           # JSON files with quarantined records & reasons
 ├── docs/
-│   ├── architecture.md
-│   ├── data-dictionary.md
-│   ├── dataset-sources.md
-│   ├── ingestion-guide.md
-│   ├── validation-guide.md
-│   ├── transformation-guide.md
-│   └── database-guide.md
+│   ├── architecture.md           # Architecture overview & design decisions
+│   ├── data-dictionary.md        # Entity definitions, attributes, & types
+│   ├── dataset-sources.md        # Origin URLs, licenses, & provenance notes
+│   ├── ingestion-guide.md        # Extraction routines & chunked readers
+│   ├── validation-guide.md       # Validation rules & leakage safeguards
+│   ├── transformation-guide.md   # Cleaning rules & Parquet storage
+│   ├── database-guide.md         # PostgreSQL loading & schema scripts
+│   └── api-guide.md              # FastAPI endpoint documentation & examples
 ├── frontend/
+│   ├── app/
+│   │   ├── globals.css           # Custom railway styling tokens
+│   │   ├── layout.tsx            # HTML root & metadata
+│   │   └── page.tsx              # 5-section integrated dashboard
+│   ├── lib/
+│   │   ├── api.ts                # Centralized typed API client
+│   │   └── utils.ts
+│   ├── next.config.mjs           # Next.js build configuration (TypeScript enabled)
+│   ├── package.json
+│   └── tsconfig.json
 ├── sql/
 │   └── analytics/
 │       ├── 01_train_performance.sql
@@ -105,246 +128,155 @@ RAIL-SIGNAL/
 │       ├── 03_passenger_utilisation.sql
 │       └── 04_schedule_quality.sql
 ├── tests/
-│   ├── test_ingestion.py
-│   ├── test_validation.py
-│   ├── test_transformation.py
-│   └── test_database_loader.py
+│   ├── test_ingestion.py         # Ingestion tests (8 passed)
+│   ├── test_validation.py        # Validation tests (20 passed)
+│   ├── test_transformation.py    # Transformation & Parquet tests (12 passed)
+│   ├── test_database_loader.py   # Database loader tests (4 passed)
+│   └── test_api.py               # FastAPI endpoint tests (10 passed)
 ├── .env.example
 ├── .gitignore
 └── README.md
 ```
 
-*Note: The structure above represents the main project organisation. Additional files may be present as development continues.*
+---
 
-## 📊 Data Sources
+## 📊 Dataset Verification & Provenance
 
-### 1. DataMeet — Indian Railways Data
+### 1. Physical Railway Infrastructure (DataMeet Indian Railways)
+- **Source:** [DataMeet Indian Railways](https://github.com/datameet/railways)
+- **License:** Open Database License (ODbL v1.0).
+- **Type:** Verified real-world Indian railway network reference data.
+- **Records:** 8,988 stations, 5,207 train services, 394,469 schedule stops.
 
-DataMeet datasets are used as reference data for Indian railway stations, trains, and schedules.
+### 2. Operational Journey Performance (Kaggle Competition Dataset)
+- **Source:** [Kaggle Indian Railways Predict Train Delay](https://www.kaggle.com/competitions/indian-railways-predict-train-delay/data)
+- **License:** Community competition rules / educational benchmark.
+- **Type:** Synthetic educational modeling features.
+- **Records:** 1,500,000 training journeys, 375,000 test journeys.
+- **Provenance Safeguard:** Passenger utilisation percentages and delay indicators are simulated attributes from educational benchmark data. They are explicitly badged in the UI and documentation and must never be represented as live CRIS telemetry.
+- **Target Leakage Protection:** Destination outcome fields (`primary_delay_cause`, `delay_minutes`) and target (`is_delayed`) are strictly excluded from approved model input features.
 
-Data includes:
-- Railway station information and location coordinates.
-- Train names, numbers, and route-related attributes.
-- Scheduled stops and arrival/departure information.
-
-Source: [DataMeet — Indian Railways](https://github.com/datameet/railways)
-
-### 2. Kaggle — Indian Railways Train Delay Dataset
-
-A separate dataset is used to explore journey delay patterns and passenger-utilisation-related analytics.
-
-The dataset contains training and test records with journey-related attributes. Its delay and utilisation information must be interpreted according to the dataset's documentation.
-
-**Data limitation:** These records are not a live railway feed. Results derived from the educational Kaggle dataset must not be presented as verified real-time Indian Railways statistics.
-
-## ⚙️ Data Engineering Pipeline
-
-### Phase 1 — Environment and Project Setup ✅
-
-- Created the project directory structure.
-- Configured the Python development environment.
-- Set up PostgreSQL and Git.
-- Collected the required datasets.
-- Prepared initial project documentation.
-
-### Phase 2 — Data Ingestion, Validation and Transformation ✅
-
-- Loaded raw JSON and CSV datasets.
-- Validated records and identified missing or invalid values.
-- Transformed accepted records into structured datasets.
-- Stored processed datasets in Parquet format.
-- Generated a data quality report.
-- Preserved invalid records in quarantine rather than inventing missing values.
-
-Processed dataset counts:
-
-| Dataset | Accepted records |
-|---|---:|
-| Stations | 8,988 |
-| Trains | 5,207 |
-| Schedules | 394,469 |
-| Journey training data | 1,500,000 |
-| Journey test data | 375,000 |
-
-### Phase 3 — PostgreSQL Integration and SQL Analytics ✅
-
-- Created the `rail_signal` PostgreSQL database.
-- Created five database tables.
-- Built a Python database loader using batch insertion.
-- Loaded processed Parquet datasets into PostgreSQL.
-- Verified the expected and actual row counts.
-- Developed four SQL analytics queries.
-- Added automated database-loader tests.
-- Documented the database workflow.
-
-**Total records loaded and verified: 2,283,664.**
-
-### Phase 4 — FastAPI Backend 🔜
-
-Planned work:
-- Create the FastAPI application.
-- Implement application and database health checks.
-- Connect the API to PostgreSQL.
-- Expose analytics through REST endpoints.
-- Add typed response schemas and API tests.
-
-### Phase 5 — Frontend Dashboard 🔜
-
-Planned work:
-- Build a React dashboard.
-- Display train performance and delay analytics.
-- Visualise passenger utilisation.
-- Show pipeline status and data quality.
-- Connect the dashboard to the backend APIs.
-
-### Phase 6 — Testing, Documentation and Integration 🔜
-
-- Run the complete test suite.
-- Validate frontend and backend integration.
-- Improve error handling and documentation.
-- Verify the complete end-to-end workflow.
-
-### Phase 7 — Optional Machine Learning Extension
-
-A machine learning component may be added later to explore delay prediction using appropriate training features.
-
-For model development, `is_delayed` is the training target, while `delay_minutes` and `primary_delay_cause` are outcome-related fields that must not be used as input features when doing so would leak the target information.
-
-Machine learning is an optional extension, not a requirement for completing the core data engineering platform.
+---
 
 ## 🗄️ PostgreSQL Database
 
 Database name: `rail_signal`
 
-| Table | Description |
-|---|---|
-| `stations` | Processed station reference data |
-| `trains` | Train information |
-| `schedules` | Scheduled train stops and timings |
-| `journey_train` | Journey training dataset |
-| `journey_test` | Journey test dataset |
+| Table | Records Loaded | Description |
+|---|---:|---|
+| `stations` | 8,988 | Verified station codes, names, zones, states, and coordinates |
+| `trains` | 5,207 | Train services, routes, durations, distances, and coach indicators |
+| `schedules` | 394,469 | Stop schedules with arrival/departure times and sequence days |
+| `journey_train` | 1,500,000 | Operational training journeys with delay and utilisation data |
+| `journey_test` | 375,000 | Operational test journeys (zero leakage columns) |
+| **Total** | **2,283,664** | **Verified relational database rows** |
 
-Database configuration is stored locally in `.env`. The file is excluded from Git to help prevent accidental exposure of credentials.
+---
 
-## 📈 SQL Analytics
+## 🌐 FastAPI Backend Endpoints
 
-The project includes the following analytical queries:
+Start the backend server on port 8000:
 
-**1. Train Performance — `01_train_performance.sql`**
-- Train counts by train type.
-- Average route distance.
-- Average train duration.
+```powershell
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-**2. Journey Delay — `02_journey_delay.sql`**
-- Total journey records.
-- Delayed and on-time journeys.
-- Delay percentages.
-- Average recorded delay.
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/health` | System health check, database connectivity, and table counts |
+| `GET` | `/api/overview` | Executive KPIs, delay distribution, train categories, and freshness |
+| `GET` | `/api/trains` | Search, category filter (`train_type`), zone filter, and pagination |
+| `GET` | `/api/trains/{train_number}` | Train details and complete sequence of scheduled stops |
+| `GET` | `/api/analytics/train-performance` | Average distance and duration breakdown by train type |
+| `GET` | `/api/analytics/delays` | On-time vs. delayed metrics and average delay minutes |
+| `GET` | `/api/analytics/passenger-flow` | Average seat utilisation and 4-band distribution (`0–50%`, `50–75%`, `75–100%`, `100%+`) |
+| `GET` | `/api/data-quality` | Accepted vs. quarantined records per dataset and rejection reasons |
+| `GET` | `/api/pipeline/status` | Workflow stages, execution metadata, and output file sizes |
 
-**3. Passenger Utilisation — `03_passenger_utilisation.sql`**
-- Average seat utilisation.
-- Journey counts by train type.
-- Overload-related indicators.
+Interactive Swagger documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
-**4. Schedule Quality — `04_schedule_quality.sql`**
-- Total schedule records.
-- Missing schedule information.
-- Unique train and station counts.
+---
 
-## 🧪 Testing
+## 💻 Frontend Operations Dashboard
 
-Run the project's automated tests from the root directory:
+Start the Next.js development server:
+
+```powershell
+cd frontend
+pnpm dev
+# or: npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Dashboard Sections:
+1. **Overview:** Network topology schematic, key operational metrics, journey delay donut chart, and processing summary.
+2. **Train Performance:** Searchable, filterable table across 5,207 trains with route distance and scheduled duration charts.
+3. **Passenger Flow:** Seat utilisation averages, train-category comparisons, four occupancy bands, and educational provenance disclaimers.
+4. **Data Pipeline:** End-to-end 7-stage workflow visualization with real execution timestamps and output file sizes.
+5. **Data Quality:** Quarantine audit summary detailing 22,614 isolated records and documented rejection reasons.
+
+---
+
+## 🧪 Automated Testing
+
+Execute the complete Python test suite (54 tests):
 
 ```powershell
 python -m pytest tests -v
 ```
 
-**Latest completed result:** 44 tests passed.
-
-The suite covers pipeline ingestion, validation, transformation, and database-loader checks.
-
-## 🚀 Getting Started
-
-### Prerequisites
-
-Install or configure:
-- Python.
-- PostgreSQL.
-- Git.
-- Node.js and npm for the planned frontend.
-
-### 1. Clone the repository
-
-```powershell
-git clone https://github.com/Prathamcoder3000/rail-signal.git
-cd rail-signal
+```text
+tests/test_api.py (10 passed)
+tests/test_database_loader.py (4 passed)
+tests/test_ingestion.py (8 passed)
+tests/test_transformation.py (12 passed)
+tests/test_validation.py (20 passed)
+============================= 54 passed in 11.41s =============================
 ```
 
-### 2. Install Python dependencies
-
-Create and activate a virtual environment if you are setting up a fresh machine:
+Execute frontend TypeScript and build checks:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+cd frontend
+npx tsc --noEmit
+npx next build
 ```
-
-Install the project's required Python packages. The dependency list should be maintained in a `requirements.txt` file as the project evolves.
-
-### 3. Configure environment variables
-
-Create a local `.env` file in the project root using `.env.example` as a reference.
-
-Configure the PostgreSQL host, port, database name, username, and password locally. Never commit real credentials.
-
-### 4. Prepare the datasets
-
-Obtain the required datasets from their original sources and place them in the corresponding `data/raw/` directories, following the project documentation.
-
-### 5. Run the pipeline
-
-Run the ingestion, validation, and transformation stages according to the instructions in:
-
-- `docs/ingestion-guide.md`
-- `docs/validation-guide.md`
-- `docs/transformation-guide.md`
-
-### 6. Load the processed data
-
-After the required Parquet files have been generated and the database schema has been created, run:
-
-```powershell
-python -m backend.pipeline.database_loader
-```
-
-The loader checks the database configuration, inserts data in batches, and verifies row counts. Follow `docs/database-guide.md` for the exact setup procedure.
-
-### 7. Execute SQL analytics
-
-Open pgAdmin, connect to PostgreSQL, select the `rail_signal` database, and execute the queries in `sql/analytics/`.
-
-*Note: A fresh clone does not automatically contain the raw datasets, processed Parquet files, database contents, or local credentials.*
-
-## 🔐 Data Quality and Limitations
-
-- Invalid records are quarantined instead of silently repaired.
-- Missing values are not replaced with fabricated railway information.
-- Processed record counts reflect accepted records, not all raw records.
-- Dataset schemas and definitions must be checked before interpreting analytical results.
-- The Kaggle dataset is not evidence of live railway conditions.
-- The project does not currently claim integration with live railway operational systems.
-
-## 👨‍💻 Developer
-
-**Pratham**  
-GitHub: [Prathamcoder3000](https://github.com/Prathamcoder3000)
-
-## 📌 Current Status
-
-**Completed:** Environment setup, data ingestion, validation, transformation, Parquet storage, PostgreSQL integration, SQL analytics, and 44 automated tests.
-
-**Next milestone:** Phase 4 — FastAPI backend development.
 
 ---
 
-*RAIL / SIGNAL — Turning railway datasets into structured, testable, and actionable analytics.*
+## 🚀 Quickstart Guide
+
+### 1. Prerequisites
+- Python 3.12+ (tested on Python 3.14.0)
+- Node.js 20+ (tested on Node v24.12.0)
+- PostgreSQL 16+ (tested on PostgreSQL 18.3)
+- Git
+
+### 2. Configure Environment
+Copy `.env.example` to `.env` in the project root:
+```ini
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_DB=rail_signal
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=your_password
+APP_PORT=8000
+```
+
+### 3. Run Backend
+```powershell
+uvicorn backend.app.main:app --port 8000 --reload
+```
+
+### 4. Run Frontend
+```powershell
+cd frontend
+pnpm install
+pnpm dev
+```
+
+---
+
+## 👨‍💻 Developer
+**Pratham** — [GitHub: Prathamcoder3000](https://github.com/Prathamcoder3000)
