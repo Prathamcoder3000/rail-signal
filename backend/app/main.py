@@ -99,12 +99,22 @@ def list_trains(
     query: Optional[str] = Query(None, description="Search term for train number or name"),
     train_type: Optional[str] = Query(None, description="Filter by train type (e.g. SF, EXP, PASS, RAJ)"),
     zone: Optional[str] = Query(None, description="Filter by administrative zone (e.g. NR, WR, CR)"),
+    sort_by: Optional[str] = Query("train_number", description="Sort field: train_number, train_name, distance_km, duration_hours, zone"),
+    sort_order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
 ):
-    """Searches, filters, and paginates train reference records with duration formatting."""
+    """Searches, filters, sorts, and paginates train reference records with duration formatting."""
     try:
-        return get_trains(query=query, train_type=train_type, zone=zone, page=page, page_size=page_size)
+        return get_trains(
+            query=query,
+            train_type=train_type,
+            zone=zone,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size,
+        )
     except Exception as exc:
         logger.error("Error listing trains: %s", exc)
         raise HTTPException(status_code=500, detail=f"Failed to query train records: {str(exc)}")

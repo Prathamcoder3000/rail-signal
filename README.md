@@ -185,8 +185,8 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 |---|---|---|
 | `GET` | `/api/health` | System health check, database connectivity, and table counts |
 | `GET` | `/api/overview` | Executive KPIs, delay distribution, train categories, and freshness |
-| `GET` | `/api/trains` | Search, category filter (`train_type`), zone filter, and pagination |
-| `GET` | `/api/trains/{train_number}` | Train details and complete sequence of scheduled stops |
+| `GET` | `/api/trains` | Search, category filter (`train_type`), zone filter (`zone`), sorting (`sort_by`, `sort_order`), and pagination |
+| `GET` | `/api/trains/{train_number}` | Train details and complete sequence of scheduled stops & waypoints |
 | `GET` | `/api/analytics/train-performance` | Average distance and duration breakdown by train type |
 | `GET` | `/api/analytics/delays` | On-time vs. delayed metrics and average delay minutes |
 | `GET` | `/api/analytics/passenger-flow` | Average seat utilisation and 4-band distribution (`0–50%`, `50–75%`, `75–100%`, `100%+`) |
@@ -209,12 +209,15 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Dashboard Sections:
-1. **Overview:** Network topology schematic, key operational metrics, journey delay donut chart, and processing summary.
-2. **Train Performance:** Searchable, filterable table across 5,207 trains with route distance and scheduled duration charts.
-3. **Passenger Flow:** Seat utilisation averages, train-category comparisons, four occupancy bands, and educational provenance disclaimers.
+### Dashboard Sections & Features:
+1. **Overview:** Network topology schematic, key operational metrics, journey delay donut chart, processing summary, and live database metric refresh.
+2. **Train Performance:** Searchable, filterable table across 5,207 trains with zone filtering (e.g. WR, NR, CR), multi-column sorting (distance, duration, name, number), and an interactive **Train Detail Drawer** displaying complete stop schedules, waypoints, day of journey, arrival/departure times, and stop filtering.
+3. **Passenger Flow:** Seat utilisation averages, train-category comparisons, four occupancy bands, and clear educational provenance disclaimers distinguishing synthetic model parameters from physical CRIS counts.
 4. **Data Pipeline:** End-to-end 7-stage workflow visualization with real execution timestamps and output file sizes.
-5. **Data Quality:** Quarantine audit summary detailing 22,614 isolated records and documented rejection reasons.
+5. **Data Quality:** Quarantine audit summary detailing 22,614 isolated records and documented rejection reasons (e.g. missing station code or invalid day numbers).
+
+### Architectural Note on Authentication:
+RAIL / SIGNAL is designed as an educational, read-only railway data engineering and analytics platform. All underlying datasets are public reference feeds (DataMeet) and anonymized benchmark journey data (Kaggle). To maintain frictionless exploration without pseudo-security or decorative forms, sign-in/sign-up has been intentionally omitted.
 
 ---
 

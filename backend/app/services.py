@@ -220,6 +220,8 @@ def get_trains(
     query: Optional[str] = None,
     train_type: Optional[str] = None,
     zone: Optional[str] = None,
+    sort_by: Optional[str] = "train_number",
+    sort_order: Optional[str] = "asc",
     page: int = 1,
     page_size: int = 20,
 ) -> TrainListResponse:
@@ -245,10 +247,26 @@ def get_trains(
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
+    # Safe sort column mapping
+    valid_sort_fields = {
+        "train_number": "train_number",
+        "train_name": "train_name",
+        "distance_km": "distance_km",
+        "duration_hours": "duration_hours",
+        "zone": "zone",
+    }
+    order_col = valid_sort_fields.get(sort_by, "train_number")
+    direction = "DESC" if (sort_order and sort_order.lower() == "desc") else "ASC"
+    order_clause = f"ORDER BY {order_col} {direction} NULLS LAST, train_number ASC"
+
     with get_db_cursor() as cur:
         # Get available train types
         cur.execute("SELECT DISTINCT train_type FROM trains WHERE train_type IS NOT NULL ORDER BY train_type;")
         available_types = [r["train_type"] for r in cur.fetchall()]
+
+        # Get available zones
+        cur.execute("SELECT DISTINCT zone FROM trains WHERE zone IS NOT NULL AND zone != '' ORDER BY zone;")
+        available_zones = [r["zone"] for r in cur.fetchall()]
 
         # Count total
         count_query = f"SELECT COUNT(*) AS total FROM trains {where_clause};"
@@ -259,7 +277,7 @@ def get_trains(
         data_query = f"""
             SELECT * FROM trains
             {where_clause}
-            ORDER BY train_number ASC
+            {order_clause}
             LIMIT %s OFFSET %s;
         """
         cur.execute(data_query, params + [page_size, offset])
@@ -298,6 +316,7 @@ def get_trains(
             page_size=page_size,
             total_pages=total_pages,
             available_train_types=available_types,
+            available_zones=available_zones,
         )
 
 

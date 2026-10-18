@@ -87,6 +87,7 @@ export type TrainListResponse = {
   page_size: number
   total_pages: number
   available_train_types: string[]
+  available_zones?: string[]
 }
 
 export type TrainDetail = {
@@ -194,11 +195,21 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
 export const api = {
   getHealth: () => apiFetch<HealthStatus>('/api/health'),
   getOverview: () => apiFetch<OverviewData>('/api/overview'),
-  getTrains: (params?: { query?: string; train_type?: string; zone?: string; page?: number; page_size?: number }) => {
+  getTrains: (params?: {
+    query?: string
+    train_type?: string
+    zone?: string
+    sort_by?: string
+    sort_order?: string
+    page?: number
+    page_size?: number
+  }) => {
     const searchParams = new URLSearchParams()
     if (params?.query) searchParams.set('query', params.query)
     if (params?.train_type && params.train_type !== 'All types') searchParams.set('train_type', params.train_type)
     if (params?.zone && params.zone !== 'All zones') searchParams.set('zone', params.zone)
+    if (params?.sort_by) searchParams.set('sort_by', params.sort_by)
+    if (params?.sort_order) searchParams.set('sort_order', params.sort_order)
     if (params?.page) searchParams.set('page', params.page.toString())
     if (params?.page_size) searchParams.set('page_size', params.page_size.toString())
     const qs = searchParams.toString()

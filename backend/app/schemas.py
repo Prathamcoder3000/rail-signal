@@ -95,6 +95,7 @@ class TrainListResponse(BaseModel):
     page_size: int
     total_pages: int
     available_train_types: List[str]
+    available_zones: List[str] = []
 
 
 class ScheduleStop(BaseModel):

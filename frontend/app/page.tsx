@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import {
   api, DataQualityData, DelayAnalyticsData, OverviewData,
-  PassengerFlowData, PipelineStatusData, TrainItem, TrainListResponse,
+  PassengerFlowData, PipelineStatusData, TrainDetail, TrainItem, TrainListResponse,
   TrainPerformanceData
 } from '@/lib/api'
 
@@ -138,11 +138,13 @@ function Overview({
   data,
   loading,
   error,
+  onRefresh,
 }: {
   go: (page: PageKey) => void
   data: OverviewData | null
   loading: boolean
   error: string | null
+  onRefresh?: () => void
 }) {
   const kpis = data?.kpis || {
     stations_processed: 8988,
@@ -190,12 +192,26 @@ function Overview({
         title="Railway intelligence overview"
         description="A structured view of verified railway infrastructure, journey delay analytics, and data pipeline quality."
         action={
-          <div className="header-context">
-            <SourceBadge source={data ? 'api-data' : 'processed-data'} />
-            <span>
-              <span className="context-pulse" />
-              {loading ? 'Refreshing...' : data ? 'Live Database' : 'Processed dataset'}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {onRefresh && (
+              <button
+                className="refresh-btn"
+                onClick={onRefresh}
+                disabled={loading}
+                title="Refresh metrics from PostgreSQL database"
+                aria-label="Refresh operational metrics"
+              >
+                <RefreshCw className={loading ? 'spinning' : ''} style={{ width: 12, height: 12 }} />
+                <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+            )}
+            <div className="header-context">
+              <SourceBadge source={data ? 'api-data' : 'processed-data'} />
+              <span>
+                <span className="context-pulse" />
+                {loading ? 'Refreshing...' : data ? 'Live Database' : 'Processed dataset'}
+              </span>
+            </div>
           </div>
         }
       />
@@ -383,6 +399,195 @@ function Overview({
 }
 
 // ==============================================================================
+// 2. Train Detail Drawer & Timetable Component
+// ==============================================================================
+
+function TrainDetailDrawer({
+  train,
+  onClose,
+}: {
+  train: TrainItem
+  onClose: () => void
+}) {
+  const [detail, setDetail] = useState<TrainDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+    api.getTrainDetail(train.train_number)
+      .then((res) => {
+        if (!active) return
+        setDetail(res)
+      })
+      .catch((err) => {
+        if (!active) return
+        setError(err.message || 'Failed to load schedule for this train.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      active = false
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [train.train_number, onClose])
+
+  const stops = useMemo(() => {
+    if (!detail?.stops) return []
+    if (!search.trim()) return detail.stops
+    const q = search.toLowerCase().trim()
+    return detail.stops.filter((s) =>
+      s.station_code.toLowerCase().includes(q) ||
+      (s.station_name && s.station_name.toLowerCase().includes(q))
+    )
+  }, [detail, search])
+
+  return (
+    <div className="drawer-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={`Schedule for Train ${train.train_number}`}>
+      <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-header-left">
+            <span className="drawer-train-id">TRAIN #{train.train_number}</span>
+            <h2 className="drawer-title">{train.train_name}</h2>
+            <div className="drawer-badges">
+              {train.train_type && <span className="type-chip">{train.train_type}</span>}
+              {train.zone && <span className="type-chip">{train.zone} ZONE</span>}
+              <SourceBadge source="api-data" />
+            </div>
+          </div>
+          <button className="drawer-close" onClick={onClose} aria-label="Close train schedule drawer">
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+        </div>
+
+        <div className="drawer-body">
+          <div className="drawer-kpis">
+            <div className="drawer-kpi">
+              <span>Route Origin</span>
+              <b>{train.from_station_name || train.from_station_code || '—'}</b>
+              <small>Dep: {train.departure_time || '—'}</small>
+            </div>
+            <div className="drawer-kpi">
+              <span>Destination</span>
+              <b>{train.to_station_name || train.to_station_code || '—'}</b>
+              <small>Arr: {train.arrival_time || '—'}</small>
+            </div>
+            <div className="drawer-kpi">
+              <span>Distance & Duration</span>
+              <b>{train.distance_km ? `${train.distance_km.toLocaleString()} km` : '—'}</b>
+              <small>{train.formatted_duration || 'Duration unrecorded'}</small>
+            </div>
+          </div>
+
+          <div className="drawer-kpi" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <span>Coach Classes Available</span>
+              <b style={{ fontSize: 11, marginTop: 4 }}>
+                {[
+                  train.has_first_ac ? '1A (AC First)' : null,
+                  train.has_second_ac ? '2A (AC 2-Tier)' : null,
+                  train.has_third_ac ? '3A (AC 3-Tier)' : null,
+                  train.has_sleeper ? 'SL (Sleeper)' : null,
+                  train.has_chair_car ? 'CC (Chair Car)' : null,
+                ].filter(Boolean).join(' · ') || 'General / Unreserved'}
+              </b>
+            </div>
+            <Status>Official Timetable</Status>
+          </div>
+
+          <div className="stops-card">
+            <div className="stops-toolbar">
+              <div className="stops-count">
+                <CircleDot style={{ width: 13, height: 13, color: 'var(--blue)' }} />
+                <span>
+                  {loading ? 'Loading timetable...' : `${detail?.total_stops || 0} Scheduled Stops & Waypoints`}
+                </span>
+              </div>
+              <label className="stops-search">
+                <Search />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Filter stops..."
+                  aria-label="Filter stops by code or name"
+                />
+              </label>
+            </div>
+
+            <div className="stops-scroll">
+              <table className="stops-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 36 }}>#</th>
+                    <th style={{ width: 44 }}>Day</th>
+                    <th>Code</th>
+                    <th>Station Name</th>
+                    <th>Arrival</th>
+                    <th>Departure</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={6} className="empty-cell">
+                        Loading complete timetable schedule from PostgreSQL database...
+                      </td>
+                    </tr>
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={6} className="empty-cell" style={{ color: 'var(--red)' }}>
+                        {error}
+                      </td>
+                    </tr>
+                  ) : stops.length ? (
+                    stops.map((s, idx) => {
+                      const isOrigin = idx === 0 && !search
+                      const isTerminus = idx === (detail?.stops.length ? detail.stops.length - 1 : -1) && !search
+                      return (
+                        <tr
+                          key={`${s.schedule_id}-${idx}`}
+                          className={isOrigin ? 'stop-origin' : isTerminus ? 'stop-destination' : ''}
+                        >
+                          <td className="stop-seq">{idx + 1}</td>
+                          <td><span className="type-chip">D{s.day_number}</span></td>
+                          <td><span className="stop-code">{s.station_code}</span></td>
+                          <td>
+                            <b>{s.station_name || s.station_code}</b>
+                            {isOrigin && <small style={{ color: '#4d7c38', fontWeight: 600 }}>Origin Station</small>}
+                            {isTerminus && <small style={{ color: 'var(--blue)', fontWeight: 600 }}>Destination Terminus</small>}
+                          </td>
+                          <td className="stop-time">{s.arrival_time || (isOrigin ? '— (Origin)' : '—')}</td>
+                          <td className="stop-time">{s.departure_time || (isTerminus ? '— (Terminus)' : '—')}</td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="empty-cell">
+                        No stops match &quot;{search}&quot;.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ==============================================================================
 // 2. Train Performance Page Component
 // ==============================================================================
 
@@ -393,18 +598,30 @@ function TrainPerformance({
 }) {
   const [query, setQuery] = useState('')
   const [type, setType] = useState('All types')
+  const [zone, setZone] = useState('All zones')
+  const [sortField, setSortField] = useState('train_number')
+  const [sortOrder, setSortOrder] = useState('asc')
   const [page, setPage] = useState(1)
   const [trainsList, setTrainsList] = useState<TrainItem[]>(fallbackTrains)
   const [totalCount, setTotalCount] = useState(5207)
   const [totalPages, setTotalPages] = useState(1)
   const [availableTypes, setAvailableTypes] = useState<string[]>([])
+  const [availableZones, setAvailableZones] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedTrain, setSelectedTrain] = useState<TrainItem | null>(null)
 
   useEffect(() => {
     let active = true
     setLoading(true)
-    api.getTrains({ query, train_type: type, page, page_size: 10 })
+    api.getTrains({
+      query,
+      train_type: type,
+      zone,
+      sort_by: sortField,
+      sort_order: sortOrder,
+      page,
+      page_size: 10,
+    })
       .then((res) => {
         if (!active) return
         setTrainsList(res.items)
@@ -412,6 +629,9 @@ function TrainPerformance({
         setTotalPages(res.total_pages)
         if (res.available_train_types?.length) {
           setAvailableTypes(res.available_train_types)
+        }
+        if (res.available_zones?.length) {
+          setAvailableZones(res.available_zones)
         }
       })
       .catch((err) => {
@@ -421,7 +641,7 @@ function TrainPerformance({
         if (active) setLoading(false)
       })
     return () => { active = false }
-  }, [query, type, page])
+  }, [query, type, zone, sortField, sortOrder, page])
 
   const chartData = perfData?.by_type?.slice(0, 6) || [
     { train_type: 'PASS', total_trains: 2459, avg_distance_km: 158, avg_duration_hours: 4.8 },
@@ -506,7 +726,7 @@ function TrainPerformance({
         <div className="table-toolbar">
           <SectionTitle
             title="Train reference table"
-            detail={`${totalCount.toLocaleString()} total trains · Page ${page} of ${totalPages}`}
+            detail={`${totalCount.toLocaleString()} total trains · Page ${page} of ${totalPages} · Click any row to view schedule`}
           />
           <div className="table-controls">
             <label className="search">
@@ -531,6 +751,39 @@ function TrainPerformance({
               </select>
               <ChevronDown />
             </label>
+            <label className="select-wrap">
+              <select
+                value={zone}
+                onChange={(e) => { setZone(e.target.value); setPage(1) }}
+                aria-label="Filter by railway zone"
+              >
+                <option>All zones</option>
+                {(availableZones.length ? availableZones : ['CR', 'ER', 'ECR', 'ECoR', 'NR', 'NCR', 'NER', 'NFR', 'NWR', 'SR', 'SCR', 'SER', 'SECR', 'SWR', 'WR', 'WCR']).map((z) => (
+                  <option key={z} value={z}>{z} Zone</option>
+                ))}
+              </select>
+              <ChevronDown />
+            </label>
+            <label className="select-wrap">
+              <select
+                value={`${sortField}:${sortOrder}`}
+                onChange={(e) => {
+                  const [sf, so] = e.target.value.split(':')
+                  setSortField(sf)
+                  setSortOrder(so)
+                  setPage(1)
+                }}
+                aria-label="Sort train list"
+              >
+                <option value="train_number:asc">Sort: Number (Asc)</option>
+                <option value="distance_km:desc">Distance (Longest)</option>
+                <option value="distance_km:asc">Distance (Shortest)</option>
+                <option value="duration_hours:desc">Duration (Longest)</option>
+                <option value="duration_hours:asc">Duration (Shortest)</option>
+                <option value="train_name:asc">Name (A–Z)</option>
+              </select>
+              <ChevronDown />
+            </label>
           </div>
         </div>
 
@@ -546,14 +799,20 @@ function TrainPerformance({
                 <th>Distance</th>
                 <th>Duration</th>
                 <th>Coaches</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} className="empty-cell">Loading train records...</td></tr>
+                <tr><td colSpan={9} className="empty-cell">Loading train records...</td></tr>
               ) : trainsList.length ? (
                 trainsList.map((t) => (
-                  <tr key={t.train_number}>
+                  <tr
+                    key={t.train_number}
+                    className="table-row-clickable"
+                    onClick={() => setSelectedTrain(t)}
+                    title="Click to view complete timetable schedule"
+                  >
                     <td>
                       <b>{t.train_number}</b>
                       <small>{t.train_name}</small>
@@ -575,10 +834,23 @@ function TrainPerformance({
                         ].filter(Boolean).join(' · ') || 'General'}
                       </small>
                     </td>
+                    <td>
+                      <button
+                        className="inspect-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedTrain(t)
+                        }}
+                        aria-label={`View schedule for train ${t.train_number}`}
+                      >
+                        <CircleDot style={{ width: 10, height: 10 }} />
+                        Stops
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
-                <tr><td colSpan={8} className="empty-cell">No train records match your filters.</td></tr>
+                <tr><td colSpan={9} className="empty-cell">No train records match your search and filter criteria.</td></tr>
               )}
             </tbody>
           </table>
@@ -594,6 +866,13 @@ function TrainPerformance({
           </div>
         </div>
       </Card>
+
+      {selectedTrain && (
+        <TrainDetailDrawer
+          train={selectedTrain}
+          onClose={() => setSelectedTrain(null)}
+        />
+      )}
     </>
   )
 }
@@ -1028,10 +1307,20 @@ export default function Page() {
 
   const current = nav.find(x => x.key === active)!
 
+  const handleRefresh = () => {
+    setLoading(true)
+    Promise.all([
+      api.getHealth().then((h) => setApiConnected(h.status === 'healthy')).catch(() => setApiConnected(false)),
+      api.getOverview().then((d) => setOverviewData(d)).catch((err) => console.warn('Refresh overview error:', err)),
+    ]).finally(() => {
+      setLoading(false)
+    })
+  }
+
   const Content = useMemo(() => {
     switch (active) {
       case 'overview':
-        return <Overview go={go} data={overviewData} loading={loading} error={null} />
+        return <Overview go={go} data={overviewData} loading={loading} error={null} onRefresh={handleRefresh} />
       case 'trains':
         return <TrainPerformance perfData={perfData} />
       case 'passengers':

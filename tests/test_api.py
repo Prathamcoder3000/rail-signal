@@ -54,6 +54,8 @@ def test_trains_list_pagination_and_search():
     assert data["page"] == 1
     assert data["page_size"] == 5
     assert len(data["available_train_types"]) > 0
+    assert "available_zones" in data
+    assert len(data["available_zones"]) > 0
 
     # 2. Search query for Rajdhani
     search_resp = client.get("/api/trains?query=Rajdhani")
@@ -69,6 +71,20 @@ def test_trains_list_pagination_and_search():
     filter_data = filter_resp.json()
     for item in filter_data["items"]:
         assert item["train_type"] == "EXP"
+
+    # 4. Filter by zone
+    zone_resp = client.get("/api/trains?zone=WR&page_size=10")
+    assert zone_resp.status_code == 200
+    zone_data = zone_resp.json()
+    for item in zone_data["items"]:
+        assert item["zone"] == "WR"
+
+    # 5. Sort by distance descending
+    sort_resp = client.get("/api/trains?sort_by=distance_km&sort_order=desc&page_size=5")
+    assert sort_resp.status_code == 200
+    sort_data = sort_resp.json()
+    distances = [i["distance_km"] for i in sort_data["items"] if i["distance_km"] is not None]
+    assert distances == sorted(distances, reverse=True)
 
 
 def test_train_detail_and_stops():
