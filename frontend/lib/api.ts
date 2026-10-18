@@ -179,17 +179,53 @@ export type PipelineStatusData = {
 
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Accept: 'application/json',
-      ...options?.headers,
-    },
-  })
-  if (!response.ok) {
-    throw new Error(`API error ${response.status}: ${response.statusText}`)
+  // 6 second timeout to fail fast if backend is offline
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 6000)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: options?.signal || controller.signal,
+      headers: {
+        Accept: 'application/json',
+        ...options?.headers,
+      },
+    })
+    clearTimeout(timeoutId)
+    if (!response.ok) {
+      throw new Error(`API error ${response.status}: ${response.statusText}`)
+    }
+    return response.json()
+  } catch (err: any) {
+    clearTimeout(timeoutId)
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out after 6000ms connecting to ${url}`)
+    }
+    throw err
   }
-  return response.json()
+}
+
+export type SystemHealthState =
+  | 'checking'
+  | 'healthy'
+  | 'db_disconnected'
+  | 'backend_offline'
+  | 'check_failed'
+
+export type SystemHealthInfo = {
+  state: SystemHealthState
+  status: SystemHealthState
+  label: string
+  tone: 'good' | 'warn' | 'error' | 'neutral'
+  headline: string
+  detail: string
+  details: string
+  latencyMs: number | null
+  database: 'connected' | 'disconnected' | 'unknown'
+  checkedAt: string
+  health?: HealthStatus
+  error?: string
 }
 
 export const api = {
@@ -221,4 +257,79 @@ export const api = {
   getPassengerFlow: () => apiFetch<PassengerFlowData>('/api/analytics/passenger-flow'),
   getDataQuality: () => apiFetch<DataQualityData>('/api/data-quality'),
   getPipelineStatus: () => apiFetch<PipelineStatusData>('/api/pipeline/status'),
+
+  checkSystemHealth: async (): Promise<SystemHealthInfo> => {
+    const start = Date.now()
+    const checkedAt = new Date().toLocaleTimeString()
+    try {
+      const health = await api.getHealth()
+      const latencyMs = Date.now() - start
+      if (health.database && health.database.connected === false) {
+        const errorDetail = health.database.error || 'FastAPI online, but PostgreSQL connection pool failed.'
+        return {
+          state: 'db_disconnected',
+          status: 'db_disconnected',
+          label: 'DATABASE OFFLINE',
+          tone: 'warn',
+          headline: 'PostgreSQL Disconnected',
+          detail: errorDetail,
+          details: errorDetail,
+          latencyMs,
+          database: 'disconnected',
+          checkedAt,
+          health,
+        }
+      }
+      const connDetail = `Connected to rail_signal (${health.counts.trains.toLocaleString()} trains, ${health.counts.stations.toLocaleString()} stations).`
+      return {
+        state: 'healthy',
+        status: 'healthy',
+        label: 'SYSTEM HEALTHY',
+        tone: 'good',
+        headline: 'FastAPI & PostgreSQL Online',
+        detail: connDetail,
+        details: connDetail,
+        latencyMs,
+        database: 'connected',
+        checkedAt,
+        health,
+      }
+    } catch (err: any) {
+      const latencyMs = Date.now() - start
+      const errMsg = err?.message || String(err)
+      if (errMsg.includes('API error')) {
+        const failDetail = `FastAPI responded with an error: ${errMsg}`
+        return {
+          state: 'check_failed',
+          status: 'check_failed',
+          label: 'CHECK FAILED',
+          tone: 'error',
+          headline: 'Health Check Failed',
+          detail: failDetail,
+          details: failDetail,
+          latencyMs,
+          database: 'unknown',
+          checkedAt,
+          error: errMsg,
+        }
+      }
+      const offlineDetail = `Cannot reach ${API_BASE_URL}/api/health. Start backend with: uvicorn backend.app.main:app --port 8000`
+      return {
+        state: 'backend_offline',
+        status: 'backend_offline',
+        label: 'BACKEND OFFLINE',
+        tone: 'warn',
+        headline: 'FastAPI Server Unreachable',
+        detail: offlineDetail,
+        details: offlineDetail,
+        latencyMs: null,
+        database: 'unknown',
+        checkedAt,
+        error: errMsg,
+      }
+    }
+  },
 }
+
+export const checkSystemHealth = api.checkSystemHealth
+

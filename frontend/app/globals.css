@@ -299,3 +299,327 @@ button { cursor:pointer; }
   to { transform: rotate(360deg); }
 }
 
+/* ========================================================================== */
+/* Desktop Sidebar Collapse & Toggle */
+/* ========================================================================== */
+.sidebar {
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              padding 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.2s ease,
+              transform 0.2s ease;
+}
+.sidebar.collapsed {
+  width: 0 !important;
+  flex: 0 0 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  border: 0 !important;
+}
+.sidebar-dismiss-btn {
+  background: transparent;
+  border: 1px solid #485043;
+  color: #adb5a3;
+  width: 26px;
+  height: 26px;
+  border-radius: 2px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.sidebar-dismiss-btn:hover {
+  background: #30372f;
+  color: #fff;
+  border-color: #636d5e;
+}
+.desktop-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 46px;
+  background: #fff;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.desktop-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.desktop-expand-btn {
+  background: #fbfaf6;
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.desktop-expand-btn:hover {
+  background: #f1f0e9;
+  border-color: #ccd0c5;
+}
+.desktop-brand-crumb {
+  font-size: 11px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.desktop-brand-crumb b {
+  color: var(--ink);
+  letter-spacing: 0.05em;
+}
+
+/* ========================================================================== */
+/* System Status Card in Sidebar */
+/* ========================================================================== */
+.system-status-box {
+  border: 1px solid #424a40;
+  background: #1e221d;
+  padding: 10px 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.system-status-box:hover {
+  border-color: #5d675b;
+  background: #232822;
+}
+.status-pill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+.status-pill.good { color: var(--lime); }
+.status-pill.warn { color: var(--amber); }
+.status-pill.error { color: var(--red); }
+.status-pill.neutral { color: #a1a59c; }
+.status-headline {
+  font-size: 10px;
+  color: #c7ceb8;
+  line-height: 1.3;
+}
+.status-retry-icon {
+  background: none;
+  border: 0;
+  color: #919a8d;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+.status-retry-icon:hover {
+  color: #fff;
+}
+
+/* ========================================================================== */
+/* System Diagnostics Modal */
+/* ========================================================================== */
+.sys-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(32, 35, 31, 0.65);
+  backdrop-filter: blur(2px);
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  animation: fadeIn 0.15s ease-out;
+}
+.sys-modal {
+  width: 540px;
+  max-width: 100%;
+  background: #fff;
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 40px rgba(32, 35, 31, 0.22);
+  display: flex;
+  flex-direction: column;
+}
+.sys-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
+  background: #faf9f4;
+}
+.sys-modal-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sys-modal-body {
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.sys-modal-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.sys-modal-kpi {
+  background: #faf9f5;
+  border: 1px solid var(--line);
+  padding: 11px 13px;
+}
+.sys-modal-kpi span {
+  font-size: 8.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  display: block;
+}
+.sys-modal-kpi b {
+  display: block;
+  font-size: 13px;
+  margin-top: 4px;
+  color: var(--ink);
+}
+.sys-modal-footer {
+  padding: 14px 22px;
+  background: #faf9f4;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ========================================================================== */
+/* Technology Stack Section */
+/* ========================================================================== */
+.tech-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 22px;
+}
+.tech-filter-btn {
+  background: #fff;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.tech-filter-btn:hover {
+  background: #f7f6f0;
+  color: var(--ink);
+  border-color: #ccd0c5;
+}
+.tech-filter-btn.active {
+  background: var(--charcoal);
+  color: #fff;
+  border-color: var(--charcoal);
+}
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.tech-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  transition: all 0.15s ease;
+}
+.tech-card:hover {
+  border-color: #b3baa9;
+  box-shadow: 0 4px 16px rgba(32, 35, 31, 0.04);
+}
+.tech-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.tech-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tech-version-badge {
+  font-family: monospace;
+  font-size: 9px;
+  padding: 2px 6px;
+  background: #edf2f5;
+  color: var(--blue);
+  border-radius: 2px;
+  font-weight: 600;
+}
+.tech-category-tag {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #8b9286;
+  font-weight: 600;
+}
+.tech-role {
+  font-size: 11px;
+  color: #555b51;
+  line-height: 1.5;
+}
+.tech-files {
+  font-family: monospace;
+  font-size: 9.5px;
+  color: #747d6e;
+  background: #fbfaf6;
+  padding: 6px 9px;
+  border: 1px solid #efeee8;
+  word-break: break-all;
+}
+.tech-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #557731;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .tech-grid {
+    grid-template-columns: 1fr;
+  }
+  .desktop-topbar {
+    padding: 10px 20px;
+  }
+}
+
+
