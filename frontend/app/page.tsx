@@ -2104,101 +2104,145 @@ export default function Page() {
     <div className="app-shell">
       {/* Sidebar Navigation */}
       <aside className={`sidebar ${mobileOpen ? 'open' : ''} ${desktopCollapsed ? 'collapsed' : ''}`}>
-        <div className="brand">
-          <div className="brand-mark">
-            <span />
-            <span />
+        {/* Unified Brand Header */}
+        <div className="sidebar-brand">
+          <div className="brand-logo-frame" aria-hidden="true">
+            <div className="brand-mark">
+              <span />
+              <span />
+            </div>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <b>RAIL / SIGNAL</b>
-            <small>RAILWAY INTELLIGENCE</small>
+          <div className="brand-text">
+            <b className="brand-title">RAIL / SIGNAL</b>
+            <small className="brand-subtitle">RAILWAY INTELLIGENCE</small>
           </div>
-          {/* Desktop sidebar collapse button */}
+          {/* Exactly ONE close/collapse button */}
           <button
-            className="sidebar-dismiss-btn"
-            onClick={() => setDesktopCollapsed(true)}
-            title="Collapse sidebar"
-            aria-label="Collapse sidebar"
+            type="button"
+            className="sidebar-close-btn"
+            onClick={() => {
+              if (mobileOpen) {
+                setMobileOpen(false)
+              } else {
+                setDesktopCollapsed(true)
+              }
+            }}
+            title={mobileOpen ? 'Close navigation drawer' : 'Collapse sidebar'}
+            aria-label={mobileOpen ? 'Close navigation drawer' : 'Collapse sidebar'}
           >
-            <X />
-          </button>
-          {/* Mobile sidebar close button */}
-          <button
-            className="mobile-close"
-            onClick={() => setMobileOpen(false)}
-            title="Close navigation"
-            aria-label="Close navigation"
-          >
-            <X />
+            <X style={{ width: 14, height: 14 }} />
           </button>
         </div>
 
-        {/* Workspace Group */}
-        <div className="nav-label">Workspace</div>
-        <nav>
-          {workspaceNav.map((item) => (
-            <button
-              key={item.key}
-              className={active === item.key ? 'active' : ''}
-              onClick={() => go(item.key)}
-            >
-              <item.icon />
-              <span>{item.label}</span>
-              {active === item.key && <i />}
-            </button>
-          ))}
-        </nav>
+        {/* Scrollable Navigation Area */}
+        <div className="sidebar-nav-container">
+          {/* Workspace Group */}
+          <div className="nav-group">
+            <div className="nav-label">Workspace</div>
+            <nav>
+              {workspaceNav.map((item) => (
+                <button
+                  key={item.key}
+                  className={active === item.key ? 'active' : ''}
+                  onClick={() => go(item.key)}
+                >
+                  <item.icon />
+                  <span>{item.label}</span>
+                  {active === item.key && <i />}
+                </button>
+              ))}
+            </nav>
+          </div>
 
-        {/* Platform & System Group */}
-        <div className="nav-label" style={{ marginTop: 14 }}>Platform &amp; System</div>
-        <nav>
-          {platformNav.map((item) => (
-            <button
-              key={item.key}
-              className={active === item.key ? 'active' : ''}
-              onClick={() => go(item.key)}
-            >
-              <item.icon />
-              <span>{item.label}</span>
-              {active === item.key && <i />}
-            </button>
-          ))}
-        </nav>
+          {/* Platform & System Group */}
+          <div className="nav-group">
+            <div className="nav-label">Platform &amp; System</div>
+            <nav>
+              {platformNav.map((item) => (
+                <button
+                  key={item.key}
+                  className={active === item.key ? 'active' : ''}
+                  onClick={() => go(item.key)}
+                >
+                  <item.icon />
+                  <span>{item.label}</span>
+                  {active === item.key && <i />}
+                </button>
+              ))}
+            </nav>
+          </div>
+        </div>
 
-        {/* Dynamic System Status & Metadata */}
+        {/* Redesigned System Health & Footer */}
         <div className="sidebar-bottom">
-          <div className="system-status-box" role="region" aria-label="System Connectivity Status">
-            <div className="system-status-header">
-              <span className={`sys-status-indicator pulse-${systemHealth.tone}`} />
-              <b className="sys-status-label">{systemHealth.label}</b>
+          <div className="system-health-card" role="region" aria-label="System Health Status">
+            {/* Row 1: Status badge & Retest button */}
+            <div className="health-card-head">
+              <div className="health-status-badge">
+                <span className={`sys-status-indicator pulse-${systemHealth.tone}`} />
+                <span className="health-status-text">{systemHealth.label}</span>
+              </div>
               <button
-                className="sys-refresh-btn"
+                type="button"
+                className="health-refresh-btn"
                 onClick={runHealthCheck}
                 disabled={isCheckingHealth}
                 title="Refresh system health"
                 aria-label="Refresh status"
               >
-                <RefreshCw className={isCheckingHealth ? 'spin' : ''} />
+                <RefreshCw className={isCheckingHealth ? 'spin' : ''} style={{ width: 11, height: 11 }} />
               </button>
             </div>
-            <p className="sys-status-subtext">{systemHealth.details}</p>
-            <div className="sys-status-actions">
-              <button
-                className="sys-diag-link"
-                onClick={() => setSysModalOpen(true)}
-                title="View full system diagnostics"
-              >
-                Diagnostics &amp; Specs &rarr;
-              </button>
+
+            {/* Row 2: Database status */}
+            <div className="health-db-status">
+              <Database style={{ width: 11, height: 11, flexShrink: 0, color: systemHealth.database === 'connected' ? 'var(--lime)' : '#9da697' }} />
+              <span>
+                {systemHealth.database === 'connected'
+                  ? 'PostgreSQL active · rail_signal'
+                  : systemHealth.status === 'checking'
+                  ? 'Probing database connection...'
+                  : 'PostgreSQL offline · Parquet'}
+              </span>
             </div>
+
+            {/* Row 3: Live counts (trains and stations) */}
+            {systemHealth.health?.counts && (
+              <div className="health-counts-grid">
+                <div className="health-count-item">
+                  <span className="health-count-val">{systemHealth.health.counts.trains.toLocaleString()}</span>
+                  <span className="health-count-lbl">Trains</span>
+                </div>
+                <div className="health-count-divider" />
+                <div className="health-count-item">
+                  <span className="health-count-val">{systemHealth.health.counts.stations.toLocaleString()}</span>
+                  <span className="health-count-lbl">Stations</span>
+                </div>
+              </div>
+            )}
+
+            {/* Row 4: Diagnostics action button */}
+            <button
+              type="button"
+              className="health-diag-action"
+              onClick={() => setSysModalOpen(true)}
+              title="Open system diagnostics & specs dialog"
+            >
+              <span>Diagnostics &amp; Specs</span>
+              <span className="health-diag-arrow">&rarr;</span>
+            </button>
           </div>
 
-          <div className="side-meta">
-            <span>database environment</span>
-            <b>{systemHealth.database === 'connected' ? 'PostgreSQL (rail_signal)' : 'Parquet dataset'}</b>
+          <div className="sidebar-meta-row">
+            <span className="sidebar-meta-label">ENVIRONMENT</span>
+            <span className="sidebar-meta-value">
+              {systemHealth.database === 'connected' ? 'PostgreSQL 18.3' : 'Parquet Store'}
+            </span>
           </div>
-          <div className="version">
-            RAIL / SIGNAL <span>v0.3.0</span> · Public Access Mode
+
+          <div className="sidebar-footer-row">
+            <span className="sidebar-ver">RAIL / SIGNAL <b>v0.3.0</b></span>
+            <span className="sidebar-mode-badge">Public Access</span>
           </div>
         </div>
       </aside>
@@ -2208,17 +2252,21 @@ export default function Page() {
         {/* Desktop Expand Bar (Visible only when desktop sidebar is collapsed) */}
         {desktopCollapsed && (
           <div className="desktop-topbar">
-            <button
-              className="desktop-expand-btn"
-              onClick={() => setDesktopCollapsed(false)}
-              aria-label="Expand sidebar navigation"
-            >
-              <Menu />
-              <span>Show Sidebar</span>
-            </button>
-            <div className="desktop-topbar-title">
-              <b>RAIL / SIGNAL</b>
-              <span>/ {current.label}</span>
+            <div className="desktop-topbar-left">
+              <button
+                type="button"
+                className="desktop-expand-btn"
+                onClick={() => setDesktopCollapsed(false)}
+                aria-label="Expand sidebar navigation"
+              >
+                <Menu style={{ width: 14, height: 14 }} />
+                <span>Show Sidebar</span>
+              </button>
+              <div className="desktop-brand-crumb">
+                <b>RAIL / SIGNAL</b>
+                <span style={{ color: '#888' }}>/</span>
+                <span>{current.label}</span>
+              </div>
             </div>
             <div
               className="desktop-topbar-status"
@@ -2236,8 +2284,12 @@ export default function Page() {
 
         {/* Mobile Topbar */}
         <div className="mobile-topbar">
-          <button onClick={() => setMobileOpen(true)} aria-label="Open navigation menu">
-            <Menu />
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Open navigation menu"
+          >
+            <Menu style={{ width: 18, height: 18 }} />
           </button>
           <b>RAIL / SIGNAL</b>
           <span>{current.label}</span>
@@ -2255,6 +2307,7 @@ export default function Page() {
       {/* Mobile Drawer Backdrop Scrim */}
       {mobileOpen && (
         <button
+          type="button"
           className="scrim"
           onClick={() => setMobileOpen(false)}
           aria-label="Close navigation overlay"
