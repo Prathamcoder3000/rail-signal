@@ -87,6 +87,7 @@ RAIL-SIGNAL/
 │   │   ├── validation.py         # Schema, coordinate bounds, & leakage checks
 │   │   ├── transformation.py     # Data cleaning, quarantine, & Parquet writers
 │   │   ├── database_loader.py    # PostgreSQL batch insertion & row verifier
+│   │   ├── monitoring.py         # Pipeline execution tracking, history & audit
 │   │   └── __init__.py
 │   └── __init__.py
 ├── data/
@@ -100,6 +101,7 @@ RAIL-SIGNAL/
 │       ├── journey_train.parquet # 1,500,000 rows
 │       ├── journey_test.parquet  # 375,000 rows
 │       ├── quality_report.json   # Pipeline execution metadata
+│       ├── pipeline_runs.jsonl   # Redundant filesystem audit log
 │       └── quarantine/           # JSON files with quarantined records & reasons
 ├── docs/
 │   ├── architecture.md           # Architecture overview & design decisions
@@ -109,12 +111,13 @@ RAIL-SIGNAL/
 │   ├── validation-guide.md       # Validation rules & leakage safeguards
 │   ├── transformation-guide.md   # Cleaning rules & Parquet storage
 │   ├── database-guide.md         # PostgreSQL loading & schema scripts
+│   ├── pipeline-monitoring.md    # Execution history schema, monitoring & triggers
 │   └── api-guide.md              # FastAPI endpoint documentation & examples
 ├── frontend/
 │   ├── app/
 │   │   ├── globals.css           # Custom railway styling tokens
 │   │   ├── layout.tsx            # HTML root & metadata
-│   │   └── page.tsx              # 5-section integrated dashboard
+│   │   └── page.tsx              # 6-section integrated dashboard
 │   ├── lib/
 │   │   ├── api.ts                # Centralized typed API client
 │   │   └── utils.ts
@@ -122,17 +125,20 @@ RAIL-SIGNAL/
 │   ├── package.json
 │   └── tsconfig.json
 ├── sql/
+│   ├── schema/
+│   │   └── 01_pipeline_runs.sql  # Idempotent DDL for execution history table
 │   └── analytics/
 │       ├── 01_train_performance.sql
 │       ├── 02_journey_delay.sql
 │       ├── 03_passenger_utilisation.sql
 │       └── 04_schedule_quality.sql
 ├── tests/
-│   ├── test_ingestion.py         # Ingestion tests (8 passed)
-│   ├── test_validation.py        # Validation tests (20 passed)
-│   ├── test_transformation.py    # Transformation & Parquet tests (12 passed)
-│   ├── test_database_loader.py   # Database loader tests (4 passed)
-│   └── test_api.py               # FastAPI endpoint tests (10 passed)
+│   ├── test_ingestion.py             # Ingestion tests (8 passed)
+│   ├── test_validation.py            # Validation tests (20 passed)
+│   ├── test_transformation.py        # Transformation & Parquet tests (12 passed)
+│   ├── test_database_loader.py       # Database loader tests (4 passed)
+│   ├── test_api.py                   # FastAPI endpoint tests (10 passed)
+│   └── test_pipeline_monitoring.py   # Execution history & trigger tests (12 passed)
 ├── .env.example
 ├── .gitignore
 └── README.md
@@ -192,6 +198,9 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 | `GET` | `/api/analytics/passenger-flow` | Average seat utilisation and 4-band distribution (`0–50%`, `50–75%`, `75–100%`, `100%+`) |
 | `GET` | `/api/data-quality` | Accepted vs. quarantined records per dataset and rejection reasons |
 | `GET` | `/api/pipeline/status` | Workflow stages, execution metadata, and output file sizes |
+| `GET` | `/api/pipeline/history` | Paginated execution history with duration, status, and record counts |
+| `GET` | `/api/pipeline/history/{run_id}` | Granular stage-level execution telemetry, timings, and recorded outcomes |
+| `POST` | `/api/pipeline/run` | Safe, non-destructive pipeline validation trigger (prerequisite & integrity audit) |
 
 Interactive Swagger documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
 
@@ -215,6 +224,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 3. **Passenger Flow:** Seat utilisation averages, train-category comparisons, four occupancy bands, and clear educational provenance disclaimers distinguishing synthetic model parameters from physical CRIS counts.
 4. **Data Pipeline:** End-to-end 7-stage workflow visualization with real execution timestamps and output file sizes.
 5. **Data Quality:** Quarantine audit summary detailing 22,614 isolated records and documented rejection reasons (e.g. missing station code or invalid day numbers).
+6. **Technology Stack:** Curated 20-technology architectural registry verified against source manifests, category filters, and live System Health diagnostics.
 
 ### Architectural Note on Authentication:
 RAIL / SIGNAL is designed as an educational, read-only railway data engineering and analytics platform. All underlying datasets are public reference feeds (DataMeet) and anonymized benchmark journey data (Kaggle). To maintain frictionless exploration without pseudo-security or decorative forms, sign-in/sign-up has been intentionally omitted.
@@ -223,7 +233,7 @@ RAIL / SIGNAL is designed as an educational, read-only railway data engineering 
 
 ## 🧪 Automated Testing
 
-Execute the complete Python test suite (54 tests):
+Execute the complete Python test suite (66 tests):
 
 ```powershell
 python -m pytest tests -v
@@ -233,9 +243,10 @@ python -m pytest tests -v
 tests/test_api.py (10 passed)
 tests/test_database_loader.py (4 passed)
 tests/test_ingestion.py (8 passed)
+tests/test_pipeline_monitoring.py (12 passed)
 tests/test_transformation.py (12 passed)
 tests/test_validation.py (20 passed)
-============================= 54 passed in 11.41s =============================
+============================= 66 passed in 11.23s =============================
 ```
 
 Execute frontend TypeScript and build checks:

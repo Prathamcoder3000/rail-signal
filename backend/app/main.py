@@ -19,6 +19,10 @@ from backend.app.schemas import (
     HealthResponse,
     OverviewResponse,
     PassengerFlowResponse,
+    PipelineHistoryResponse,
+    PipelineRunDetail,
+    PipelineRunTriggerRequest,
+    PipelineRunTriggerResponse,
     PipelineStatusResponse,
     TrainDetailResponse,
     TrainListResponse,
@@ -30,10 +34,13 @@ from backend.app.services import (
     get_health_status,
     get_overview_data,
     get_passenger_flow_analytics,
+    get_pipeline_history_service,
+    get_pipeline_run_detail_service,
     get_pipeline_status,
     get_train_detail,
     get_train_performance_analytics,
     get_trains,
+    trigger_validation_pipeline_service,
 )
 
 logger = logging.getLogger("rail_signal.api")
@@ -179,6 +186,60 @@ def pipeline_status():
         raise HTTPException(status_code=500, detail=f"Failed to load pipeline status: {str(exc)}")
 
 
+@app.get("/api/pipeline/history", response_model=PipelineHistoryResponse, tags=["Data Pipeline"])
+def pipeline_history(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    status: Optional[str] = Query(None, description="Filter by status: RUNNING, SUCCESS, FAILED"),
+    run_type: Optional[str] = Query(None, description="Filter by run_type: VALIDATION, FULL_ETL"),
+):
+    """Returns paginated pipeline execution runs with duration, record counts, and status."""
+    try:
+        return get_pipeline_history_service(
+            page=page,
+            page_size=page_size,
+            status=status,
+            run_type=run_type,
+        )
+    except Exception as exc:
+        logger.error("Error querying pipeline history: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Failed to query pipeline execution history: {str(exc)}")
+
+
+@app.get("/api/pipeline/history/{run_id}", response_model=PipelineRunDetail, tags=["Data Pipeline"])
+def pipeline_run_detail(run_id: str):
+    """Returns granular stage-level execution telemetry and timing for a specific run ID."""
+    try:
+        detail = get_pipeline_run_detail_service(run_id)
+        if not detail:
+            raise HTTPException(status_code=404, detail=f"Pipeline run '{run_id}' not found.")
+        return detail
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("Error fetching run detail '%s': %s", run_id, exc)
+        raise HTTPException(status_code=500, detail=f"Failed to load execution details for run '{run_id}': {str(exc)}")
+
+
+@app.post("/api/pipeline/run", response_model=PipelineRunTriggerResponse, tags=["Data Pipeline"])
+def trigger_pipeline_run(payload: Optional[PipelineRunTriggerRequest] = None):
+    """
+    Executes a safe, non-destructive pipeline validation run.
+    Guarantees no modifications or duplicate insertions into existing database tables.
+    """
+    mode = payload.mode if payload else "validation"
+    try:
+        return trigger_validation_pipeline_service(mode=mode)
+    except ValueError as val_err:
+        raise HTTPException(status_code=400, detail=str(val_err))
+    except RuntimeError as run_err:
+        raise HTTPException(status_code=409, detail=str(run_err))
+    except Exception as exc:
+        logger.error("Error executing validation pipeline: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Validation pipeline execution failed: {str(exc)}")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.app.main:app", host=settings.app_host, port=settings.app_port, reload=True)
+

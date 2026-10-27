@@ -176,10 +176,29 @@ Details on pipeline execution status, 7 workflow stages, and Parquet output spec
 
 ---
 
+### 2.6 Pipeline Execution Monitoring & History (Phase 1)
+
+#### `GET /api/pipeline/history`
+Returns paginated pipeline execution runs with duration, status, record tallies, and error summaries.
+- **Query Parameters:** `page` (default 1), `page_size` (default 10, max 100), `status` (`RUNNING`, `SUCCESS`, `FAILED`), `run_type` (`VALIDATION`, `FULL_ETL`).
+
+#### `GET /api/pipeline/history/{run_id}`
+Returns granular stage-level execution telemetry, timings, and recorded outcomes for a specific run ID. Returns `404 Not Found` if the run ID does not exist.
+
+#### `POST /api/pipeline/run`
+Executes a safe, non-destructive pipeline validation run.
+- **Request Body:** `{"mode": "validation"}`
+- **Safety Guarantee:** Validates environment, raw files, 2,283,664 PostgreSQL database records, and Parquet storage without writing to or altering railway data tables. Full ETL mode is restricted in Phase 1 to prevent accidental data overwrites.
+
+See [docs/pipeline-monitoring.md](file:///d:/DE%20project/RAIL-SIGNAL/docs/pipeline-monitoring.md) for full schema and payload documentation.
+
+---
+
 ## 3. Running API Tests
 
-Automated tests for all endpoints and error cases:
+Automated tests for all endpoints and execution monitoring:
 
 ```powershell
-python -m pytest tests/test_api.py -v
+python -m pytest tests/test_api.py tests/test_pipeline_monitoring.py -v
 ```
+

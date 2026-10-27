@@ -204,3 +204,70 @@ class PipelineStatusResponse(BaseModel):
     stages: List[PipelineStage]
     inputs: Dict[str, Any]
     outputs: Dict[str, Any]
+
+
+# ==============================================================================
+# Pipeline Execution History & Monitoring (Phase 1)
+# ==============================================================================
+
+class PipelineStageDetail(BaseModel):
+    stage_name: str
+    status: str
+    started_at: Optional[str] = None
+    ended_at: Optional[str] = None
+    duration_seconds: Optional[float] = None
+    records_processed: int = 0
+    records_accepted: int = 0
+    records_quarantined: int = 0
+    details: Dict[str, Any] = Field(default_factory=dict)
+    error: Optional[str] = None
+
+
+class PipelineRunSummary(BaseModel):
+    run_id: str
+    pipeline_name: str
+    run_type: str
+    trigger_type: str
+    status: str
+    start_time: datetime
+    finish_time: Optional[datetime] = None
+    duration_seconds: Optional[float] = None
+    records_processed: int = 0
+    records_accepted: int = 0
+    records_quarantined: int = 0
+    current_stage: Optional[str] = None
+    failed_stage: Optional[str] = None
+    error_summary: Optional[str] = None
+    stage_count: int = 0
+    created_at: datetime
+
+
+class PipelineRunDetail(PipelineRunSummary):
+    stage_details: List[PipelineStageDetail] = []
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class PipelineHistoryResponse(BaseModel):
+    items: List[PipelineRunSummary]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
+class PipelineRunTriggerRequest(BaseModel):
+    mode: str = Field(
+        default="validation",
+        description="Execution mode: 'validation' for safe prerequisite and source integrity verification. Full ETL mode is restricted in Phase 1.",
+    )
+
+
+class PipelineRunTriggerResponse(BaseModel):
+    run_id: str
+    pipeline_name: str
+    run_type: str
+    status: str
+    message: str
+    duration_seconds: Optional[float] = None
+    summary: PipelineRunSummary
+
