@@ -331,3 +331,88 @@ pnpm build
    ```
 3. Navigate to [http://localhost:3000](http://localhost:3000) and click **Data Pipeline** in the sidebar.
 4. Click **Run Pipeline Validation** to trigger live execution and inspect the resulting telemetry drawer.
+
+---
+
+## 8. Phase 3: Unified ETL Orchestration & Schema Management
+
+Phase 3 introduces a production-grade, observable CLI and programmatic orchestration engine (`backend/pipeline/orchestrator.py`) and schema manager (`backend/pipeline/schema_manager.py`) coordinating all existing ETL stages while protecting the 2,283,664 records across existing database tables.
+
+### Architecture & Stage Execution Order
+```
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Preflight & Environment (01_preflight_and_config)        │
+│    - Verifies .env, DB credentials, filesystem paths        │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│ 2. Schema Validation (02_schema_validation)                 │
+│    - Introspects information_schema tables, columns, types  │
+│    - Verifies primary keys and constraint integrity         │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│ 3. Transformation & Parquet (03_transformation_and_parquet) │
+│    - Chunked CSV streaming (ir_train.csv, ir_test.csv)      │
+│    - Data standardization & PyArrow atomic Parquet outputs  │
+│    - Quarantine routing & quality_report.json generation    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│ 4. Atomic Database Loading (04_database_loading)            │
+│    - Single transaction across all 5 datasets               │
+│    - Overwrite protection guard (refuses unapproved append) │
+│    - BATCH_SIZE = 5,000 via psycopg2 execute_values         │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+┌──────────────────────────────▼──────────────────────────────┐
+│ 5. Post-Load Verification (05_post_load_verification)       │
+│    - Cross-references database counts with Parquet metadata │
+│    - Verifies B-Tree index health                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Execution Modes
+
+| Mode | Command Flag | Description | DB Writes? |
+|---|---|---|:---:|
+| **Preflight** | `--mode preflight` | Read-only audit of configuration, datasets, and DB readiness. | No |
+| **Schema Validate**| `--mode schema-validate` | Deep schema introspection against expected relational DDL. | No |
+| **Schema Init** | `--mode schema-init` | Safe idempotent DDL application (`CREATE TABLE IF NOT EXISTS`). | Idempotent DDL only |
+| **Validate** | `--mode validate` | End-to-end component validation with telemetry in `pipeline_runs`.| No |
+| **ETL (Dry Run)**| `--mode etl --dry-run` | Executes pipeline transformations but skips database loads. | No |
+| **Full ETL** | `--mode etl --allow-data-replace` | Full ETL reload. Requires explicit replace flag if DB populated.| Atomic Writes |
+
+### Windows PowerShell Commands
+
+```powershell
+# 1. Preflight Audit
+python -m backend.pipeline.orchestrator --mode preflight
+
+# 2. Deep Schema Validation
+python -m backend.pipeline.orchestrator --mode schema-validate
+
+# 3. Safe Idempotent Schema Initialization
+python -m backend.pipeline.orchestrator --mode schema-init
+
+# 4. Safe Pipeline Validation Run
+python -m backend.pipeline.orchestrator --mode validate
+
+# 5. Simulated Dry-Run ETL
+python -m backend.pipeline.orchestrator --mode etl --dry-run
+
+# 6. Silent Machine-Readable JSON Telemetry (for CI/CD pipelines)
+python -m backend.pipeline.orchestrator --mode preflight --quiet --json
+```
+
+### Exit Codes
+
+- `0`: Successful execution.
+- `1`: Pipeline or stage validation failure.
+- `2`: Configuration, environment, or prerequisite error.
+
+### Data Protection Safeguards
+1. **Zero Destructive DDL:** `schema_manager.py` verifies all DDL scripts and strictly rejects any file containing `DROP` or `TRUNCATE`.
+2. **ETL Overwrite Guard:** If target database tables already contain records, `orchestrator.py` refuses to execute database loading unless `--allow-data-replace` or `--dry-run` is passed.
+3. **Transaction Boundaries:** All database insertions share a single atomic transaction; partial failures roll back completely.
+4. **Credential Sanitization:** Passwords, connection URIs, and authentication tokens are automatically masked (`***`) in logs and API responses.

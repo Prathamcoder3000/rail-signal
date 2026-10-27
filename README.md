@@ -233,7 +233,7 @@ RAIL / SIGNAL is designed as an educational, read-only railway data engineering 
 
 ## 🧪 Automated Testing
 
-Execute the complete Python test suite (66 tests):
+Execute the complete Python test suite (92 tests):
 
 ```powershell
 python -m pytest tests -v
@@ -243,10 +243,12 @@ python -m pytest tests -v
 tests/test_api.py (10 passed)
 tests/test_database_loader.py (4 passed)
 tests/test_ingestion.py (8 passed)
+tests/test_orchestrator.py (18 passed)
 tests/test_pipeline_monitoring.py (12 passed)
+tests/test_schema_manager.py (8 passed)
 tests/test_transformation.py (12 passed)
 tests/test_validation.py (20 passed)
-============================= 66 passed in 11.23s =============================
+============================= 92 passed in 26.43s =============================
 ```
 
 Execute frontend TypeScript and build checks:
@@ -255,6 +257,29 @@ Execute frontend TypeScript and build checks:
 cd frontend
 npx tsc --noEmit
 npx next build
+```
+
+---
+
+## ⚙️ Unified ETL Orchestration Engine (Phase 3)
+
+The platform includes a unified CLI orchestrator (`backend/pipeline/orchestrator.py`) and schema management engine (`backend/pipeline/schema_manager.py`):
+
+```powershell
+# 1. Non-destructive Preflight Audit
+python -m backend.pipeline.orchestrator --mode preflight
+
+# 2. Deep Schema Validation
+python -m backend.pipeline.orchestrator --mode schema-validate
+
+# 3. Idempotent Schema Initialization
+python -m backend.pipeline.orchestrator --mode schema-init
+
+# 4. End-to-End Pipeline Validation
+python -m backend.pipeline.orchestrator --mode validate
+
+# 5. Dry-Run Simulation
+python -m backend.pipeline.orchestrator --mode etl --dry-run
 ```
 
 ---
