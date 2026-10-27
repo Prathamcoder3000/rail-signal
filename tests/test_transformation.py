@@ -316,3 +316,36 @@ def test_quality_report_persistence(tmp_path: Path):
         data = json.load(f)
     assert data["accepted_counts"]["test_dataset"] == 10
     assert data["quarantined_counts"]["test_dataset"] == 1
+
+
+def test_quarantine_archiving_and_isolation(tmp_path: Path):
+    """Verifies that quarantine archiving preserves run-stamped historical files without deleting existing ones."""
+    quarantine_items = [{"record": {"id": 101}, "rejection_reason": "Invalid Code"}]
+    q_dir = tmp_path / "quarantine"
+
+    # Run 1
+    q_path1 = save_quarantine_records(
+        quarantine_items, "stations", output_dir=q_dir, run_id="run_001", archive=True
+    )
+    assert q_path1.exists()
+    archive_file1 = q_dir / "archive" / "stations_quarantine_run_001.json"
+    assert archive_file1.exists()
+
+    # Run 2 with different data
+    quarantine_items_2 = [{"record": {"id": 102}, "rejection_reason": "Out of Bounds"}]
+    save_quarantine_records(
+        quarantine_items_2, "stations", output_dir=q_dir, run_id="run_002", archive=True
+    )
+
+    # Both run archives must exist (evidence preservation)
+    assert archive_file1.exists()
+    archive_file2 = q_dir / "archive" / "stations_quarantine_run_002.json"
+    assert archive_file2.exists()
+
+    with open(archive_file1, "r", encoding="utf-8") as f:
+        data1 = json.load(f)
+    assert data1[0]["record"]["id"] == 101
+
+    with open(archive_file2, "r", encoding="utf-8") as f:
+        data2 = json.load(f)
+    assert data2[0]["record"]["id"] == 102

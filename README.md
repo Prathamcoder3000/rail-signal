@@ -233,22 +233,26 @@ RAIL / SIGNAL is designed as an educational, read-only railway data engineering 
 
 ## 🧪 Automated Testing
 
-Execute the complete Python test suite (92 tests):
+Execute the complete Python test suite (120 tests across 12 modules):
 
 ```powershell
 python -m pytest tests -v
 ```
 
 ```text
+tests/test_advisory_lock.py (4 passed)
 tests/test_api.py (10 passed)
 tests/test_database_loader.py (4 passed)
+tests/test_db_pool.py (11 passed)
 tests/test_ingestion.py (8 passed)
-tests/test_orchestrator.py (18 passed)
+tests/test_logging.py (6 passed)
+tests/test_metrics.py (2 passed)
+tests/test_orchestrator.py (22 passed)
 tests/test_pipeline_monitoring.py (12 passed)
 tests/test_schema_manager.py (8 passed)
-tests/test_transformation.py (12 passed)
+tests/test_transformation.py (13 passed)
 tests/test_validation.py (20 passed)
-============================= 92 passed in 26.43s =============================
+============================ 120 passed in 25.36s =============================
 ```
 
 Execute frontend TypeScript and build checks:

@@ -793,14 +793,27 @@ def save_quarantine_records(
     quarantined_records: Sequence[Dict[str, Any]],
     dataset_name: str,
     output_dir: Union[str, Path] = "data/processed/quarantine",
+    run_id: Optional[str] = None,
+    archive: bool = False,
 ) -> Path:
-    """Saves quarantined records and their rejection reasons to a JSON file."""
+    """
+    Saves quarantined records and their rejection reasons to a JSON file.
+    Optionally saves a run-stamped snapshot to output_dir/archive/ without
+    overwriting historical evidence.
+    """
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{dataset_name}_quarantine.json"
 
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(quarantined_records, f, indent=2, default=str)
+
+    if archive and run_id:
+        archive_dir = out_dir / "archive"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        archive_path = archive_dir / f"{dataset_name}_quarantine_{run_id}.json"
+        with open(archive_path, "w", encoding="utf-8") as af:
+            json.dump(quarantined_records, af, indent=2, default=str)
 
     logger.info("Saved %d quarantined records for %s to %s", len(quarantined_records), dataset_name, out_path)
     return out_path

@@ -8,11 +8,12 @@ from contextlib import asynccontextmanager
 import logging
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.config import settings
 from backend.app.db import close_db_pool, get_db_pool
+from backend.app.logging_config import configure_logging
 from backend.app.schemas import (
     DataQualityResponse,
     DelayAnalyticsResponse,
@@ -43,8 +44,7 @@ from backend.app.services import (
     trigger_validation_pipeline_service,
 )
 
-logger = logging.getLogger("rail_signal.api")
-logging.basicConfig(level=logging.INFO)
+logger = configure_logging()
 
 
 @asynccontextmanager
@@ -237,6 +237,55 @@ def trigger_pipeline_run(payload: Optional[PipelineRunTriggerRequest] = None):
     except Exception as exc:
         logger.error("Error executing validation pipeline: %s", exc)
         raise HTTPException(status_code=500, detail=f"Validation pipeline execution failed: {str(exc)}")
+
+
+@app.get("/metrics", tags=["Observability"])
+def prometheus_metrics():
+    """
+    Exposes Prometheus-compatible pipeline execution telemetry, stage durations,
+    and verified record counts in standard text exposition format (version 0.0.4).
+    Bounded cardinality: only statuses and stages are labeled; zero sensitive data.
+    """
+    from backend.pipeline.monitoring import get_pipeline_history_stats
+    from backend.app.db import get_db_cursor
+
+    lines = [
+        "# HELP rail_signal_pipeline_runs_total Total number of pipeline execution runs by terminal status",
+        "# TYPE rail_signal_pipeline_runs_total counter",
+    ]
+    try:
+        stats = get_pipeline_history_stats()
+        lines.append(f'rail_signal_pipeline_runs_total{{status="SUCCESS"}} {stats.get("successful_runs", 0)}')
+        lines.append(f'rail_signal_pipeline_runs_total{{status="FAILED"}} {stats.get("failed_runs", 0)}')
+        lines.append(f'rail_signal_pipeline_runs_total{{status="RUNNING"}} {stats.get("running_runs", 0)}')
+        lines.append(f'rail_signal_pipeline_runs_total{{status="ALL"}} {stats.get("total_runs", 0)}')
+
+        latest_dur = stats.get("latest_run_duration_seconds")
+        if latest_dur is not None:
+            lines.append("# HELP rail_signal_pipeline_latest_duration_seconds Duration of latest pipeline run in seconds")
+            lines.append("# TYPE rail_signal_pipeline_latest_duration_seconds gauge")
+            lines.append(f"rail_signal_pipeline_latest_duration_seconds {latest_dur}")
+
+        lines.append("# HELP rail_signal_database_up Database connectivity health probe (1 = connected, 0 = unreachable)")
+        lines.append("# TYPE rail_signal_database_up gauge")
+        lines.append("rail_signal_database_up 1")
+
+        lines.append("# HELP rail_signal_records_verified_total Total verified relational records in database")
+        lines.append("# TYPE rail_signal_records_verified_total gauge")
+        with get_db_cursor() as cur:
+            for t in ("stations", "trains", "schedules", "journey_train", "journey_test"):
+                cur.execute(f"SELECT COUNT(*) AS cnt FROM {t};")
+                row = cur.fetchone()
+                cnt = row["cnt"] if isinstance(row, dict) else row[0]
+                lines.append(f'rail_signal_records_verified_total{{table="{t}"}} {cnt}')
+    except Exception as exc:
+        logger.warning("Error generating metrics: %s", exc)
+        lines.append("# HELP rail_signal_database_up Database connectivity health probe (1 = connected, 0 = unreachable)")
+        lines.append("# TYPE rail_signal_database_up gauge")
+        lines.append("rail_signal_database_up 0")
+
+    content = "\n".join(lines) + "\n"
+    return Response(content=content, media_type="text/plain; version=0.0.4; charset=utf-8")
 
 
 if __name__ == "__main__":

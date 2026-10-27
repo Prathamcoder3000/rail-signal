@@ -262,3 +262,112 @@ def test_stage_failure_marks_run_failed():
     with patch.object(orchestrator, "_check_storage_artifacts", side_effect=RuntimeError("Storage disk offline")):
         with pytest.raises(RuntimeError, match="Storage disk offline"):
             orchestrator.run()
+
+
+# =============================================================================
+# Phase 4A & 4B: Advisory Locking, Dry-Run Isolation & Interruption Tests
+# =============================================================================
+
+def test_orchestrator_advisory_lock_contention_raises_and_exits_one(capsys):
+    """Verifies that advisory lock contention halts orchestration and returns exit code 1."""
+    from backend.pipeline.advisory_lock import AdvisoryLockContentionError
+
+    with patch(
+        "backend.pipeline.orchestrator.acquire_pipeline_advisory_lock",
+        side_effect=AdvisoryLockContentionError("PostgreSQL advisory lock (key=842091238471) is currently held by another active process."),
+    ):
+        exit_code = main(["--mode", "etl", "--dry-run", "--quiet"])
+        assert exit_code == 1
+        captured = capsys.readouterr()
+        assert "ORCHESTRATION FAILURE" in captured.err
+        assert "currently held by another active process" in captured.err
+
+
+def test_orchestrator_dry_run_workspace_isolation():
+    """Verifies that dry-run creates an isolated temp directory, routes output there, and cleans it up."""
+    from backend.pipeline.transformation import QualityReport
+    mock_report = QualityReport(
+        run_timestamp="2026-10-27T12:00:00Z",
+        accepted_counts={"stations": 10},
+        quarantined_counts={"stations": 0},
+    )
+
+    passed_processed_dir = None
+
+    def fake_transform(raw_dir, processed_dir, chunk_size, max_journey_chunks):
+        nonlocal passed_processed_dir
+        passed_processed_dir = Path(processed_dir)
+        # Create a mock file in the isolated directory
+        (passed_processed_dir / "test_marker.tmp").write_text("dry run isolated")
+        return mock_report
+
+    config = OrchestratorConfig(
+        mode=OrchestrationMode.ETL,
+        dry_run=True,
+        keep_dry_run_artifacts=False,
+        quiet=True,
+    )
+    orchestrator = ETLOrchestrator(config)
+
+    with patch("backend.pipeline.orchestrator.execute_transformation_pipeline", side_effect=fake_transform):
+        result = orchestrator.run()
+
+    assert result["status"] == "SUCCESS"
+    assert passed_processed_dir is not None
+    # Must NOT be the production processed directory
+    assert passed_processed_dir != config.processed_dir
+    assert "rail_signal_dryrun_" in str(passed_processed_dir)
+    # Temporary directory must be deleted after execution
+    assert not passed_processed_dir.exists()
+
+
+def test_orchestrator_dry_run_keep_artifacts(tmp_path):
+    """Verifies that keep_dry_run_artifacts=True preserves the isolated workspace for inspection."""
+    from backend.pipeline.transformation import QualityReport
+    mock_report = QualityReport(
+        run_timestamp="2026-10-27T12:00:00Z",
+        accepted_counts={"stations": 10},
+        quarantined_counts={"stations": 0},
+    )
+
+    passed_processed_dir = None
+
+    def fake_transform(raw_dir, processed_dir, chunk_size, max_journey_chunks):
+        nonlocal passed_processed_dir
+        passed_processed_dir = Path(processed_dir)
+        (passed_processed_dir / "debug_report.json").write_text("{}")
+        return mock_report
+
+    config = OrchestratorConfig(
+        mode=OrchestrationMode.ETL,
+        dry_run=True,
+        keep_dry_run_artifacts=True,
+        quiet=True,
+    )
+    orchestrator = ETLOrchestrator(config)
+
+    with patch("backend.pipeline.orchestrator.execute_transformation_pipeline", side_effect=fake_transform):
+        result = orchestrator.run()
+
+    try:
+        assert result["status"] == "SUCCESS"
+        assert passed_processed_dir.exists()
+        assert (passed_processed_dir / "debug_report.json").exists()
+    finally:
+        # Manual cleanup for test cleanliness
+        if passed_processed_dir and passed_processed_dir.exists():
+            import shutil
+            shutil.rmtree(passed_processed_dir, ignore_errors=True)
+
+
+def test_orchestrator_interruption_returns_exit_code_130(capsys):
+    """Verifies that Ctrl+C / KeyboardInterrupt returns exit code 130 and reports interruption."""
+    config = OrchestratorConfig(mode=OrchestrationMode.PREFLIGHT, quiet=True)
+    orchestrator = ETLOrchestrator(config)
+
+    with patch.object(orchestrator, "_check_environment_and_config", side_effect=KeyboardInterrupt):
+        with patch("backend.pipeline.orchestrator.ETLOrchestrator", return_value=orchestrator):
+            exit_code = main(["--mode", "preflight", "--quiet"])
+            assert exit_code == 130
+            captured = capsys.readouterr()
+            assert "[INTERRUPTED]" in captured.err or "cancelled by user" in captured.err
