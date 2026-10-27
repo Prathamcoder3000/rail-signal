@@ -177,11 +177,78 @@ export type PipelineStatusData = {
   outputs: Record<string, any>
 }
 
-async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
+export type PipelineStageDetail = {
+  stage_name: string
+  status: 'SUCCESS' | 'FAILED' | 'RUNNING' | 'PENDING' | 'SKIPPED' | string
+  started_at?: string | null
+  ended_at?: string | null
+  duration_seconds?: number | null
+  records_processed: number
+  details: Record<string, any>
+  error?: string | null
+}
+
+export type PipelineRunSummary = {
+  run_id: string
+  pipeline_name: string
+  run_type: 'VALIDATION' | 'FULL_ETL' | 'CUSTOM' | string
+  trigger_type: 'MANUAL_API' | 'CLI' | 'SCHEDULED' | 'SYSTEM' | string
+  status: 'SUCCESS' | 'FAILED' | 'RUNNING' | 'PENDING' | string
+  start_time: string
+  finish_time?: string | null
+  duration_seconds?: number | null
+  records_processed: number
+  records_accepted: number
+  records_quarantined: number
+  current_stage?: string | null
+  failed_stage?: string | null
+  error_summary?: string | null
+  stage_count: number
+  created_at?: string | null
+}
+
+export type PipelineRunDetail = PipelineRunSummary & {
+  stage_details: PipelineStageDetail[]
+  metadata: Record<string, any>
+}
+
+export type PipelineHistoryStats = {
+  total_runs: number
+  successful_runs: number
+  failed_runs: number
+  running_runs: number
+  latest_run_status?: string | null
+  latest_run_timestamp?: string | null
+  latest_run_duration_seconds?: number | null
+}
+
+export type PipelineHistoryResponse = {
+  items: PipelineRunSummary[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  stats?: PipelineHistoryStats | null
+}
+
+export type PipelineRunTriggerRequest = {
+  mode: 'validation' | 'full_etl'
+}
+
+export type PipelineRunTriggerResponse = {
+  run_id: string
+  run_type: string
+  status: string
+  message: string
+  duration_seconds?: number | null
+  summary: Record<string, any>
+}
+
+async function apiFetch<T>(endpoint: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
-  // 6 second timeout to fail fast if backend is offline
+  const timeout = options?.timeoutMs || 8000
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 6000)
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
 
   try {
     const response = await fetch(url, {
@@ -194,13 +261,22 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
     })
     clearTimeout(timeoutId)
     if (!response.ok) {
-      throw new Error(`API error ${response.status}: ${response.statusText}`)
+      let detail = response.statusText
+      try {
+        const errJson = await response.json()
+        if (errJson && errJson.detail) {
+          detail = errJson.detail
+        }
+      } catch {
+        // use default statusText
+      }
+      throw new Error(`API error ${response.status}: ${detail}`)
     }
     return response.json()
   } catch (err: any) {
     clearTimeout(timeoutId)
     if (err.name === 'AbortError') {
-      throw new Error(`Request timed out after 6000ms connecting to ${url}`)
+      throw new Error(`Request timed out after ${timeout}ms connecting to ${url}`)
     }
     throw err
   }
@@ -257,6 +333,31 @@ export const api = {
   getPassengerFlow: () => apiFetch<PassengerFlowData>('/api/analytics/passenger-flow'),
   getDataQuality: () => apiFetch<DataQualityData>('/api/data-quality'),
   getPipelineStatus: () => apiFetch<PipelineStatusData>('/api/pipeline/status'),
+  getPipelineHistory: (params?: {
+    page?: number
+    page_size?: number
+    status?: string
+    run_type?: string
+  }) => {
+    const searchParams = new URLSearchParams()
+    if (params?.page) searchParams.set('page', params.page.toString())
+    if (params?.page_size) searchParams.set('page_size', params.page_size.toString())
+    if (params?.status && params.status !== 'ALL') searchParams.set('status', params.status)
+    if (params?.run_type && params.run_type !== 'ALL') searchParams.set('run_type', params.run_type)
+    const qs = searchParams.toString()
+    return apiFetch<PipelineHistoryResponse>(`/api/pipeline/history${qs ? `?${qs}` : ''}`)
+  },
+  getPipelineRunDetail: (runId: string) =>
+    apiFetch<PipelineRunDetail>(`/api/pipeline/history/${encodeURIComponent(runId)}`),
+  triggerPipelineRun: (payload?: PipelineRunTriggerRequest) =>
+    apiFetch<PipelineRunTriggerResponse>('/api/pipeline/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload || { mode: 'validation' }),
+      timeoutMs: 15000,
+    }),
 
   checkSystemHealth: async (): Promise<SystemHealthInfo> => {
     const start = Date.now()

@@ -247,12 +247,23 @@ class PipelineRunDetail(PipelineRunSummary):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+class PipelineHistoryStats(BaseModel):
+    total_runs: int = 0
+    successful_runs: int = 0
+    failed_runs: int = 0
+    running_runs: int = 0
+    latest_run_status: Optional[str] = None
+    latest_run_timestamp: Optional[datetime] = None
+    latest_run_duration_seconds: Optional[float] = None
+
+
 class PipelineHistoryResponse(BaseModel):
     items: List[PipelineRunSummary]
     total: int
     page: int
     page_size: int
     total_pages: int
+    stats: Optional[PipelineHistoryStats] = None
 
 
 class PipelineRunTriggerRequest(BaseModel):

@@ -222,7 +222,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 1. **Overview:** Network topology schematic, key operational metrics, journey delay donut chart, processing summary, and live database metric refresh.
 2. **Train Performance:** Searchable, filterable table across 5,207 trains with zone filtering (e.g. WR, NR, CR), multi-column sorting (distance, duration, name, number), and an interactive **Train Detail Drawer** displaying complete stop schedules, waypoints, day of journey, arrival/departure times, and stop filtering.
 3. **Passenger Flow:** Seat utilisation averages, train-category comparisons, four occupancy bands, and clear educational provenance disclaimers distinguishing synthetic model parameters from physical CRIS counts.
-4. **Data Pipeline:** End-to-end 7-stage workflow visualization with real execution timestamps and output file sizes.
+4. **Data Pipeline & Execution Monitoring:** Live pipeline monitoring dashboard backed by PostgreSQL `pipeline_runs`. Features real aggregate execution metrics (total, successful, failed, latest runtime), interactive safe 4-stage validation execution (`POST /api/pipeline/run`), filterable execution history audit trail with pagination and manual refresh, and an interactive **Execution Telemetry Drawer** displaying stage-by-stage timings, verified record counts (2,283,664 rows), and diagnostics.
 5. **Data Quality:** Quarantine audit summary detailing 22,614 isolated records and documented rejection reasons (e.g. missing station code or invalid day numbers).
 6. **Technology Stack:** Curated 20-technology architectural registry verified against source manifests, category filters, and live System Health diagnostics.
 

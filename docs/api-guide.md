@@ -176,10 +176,10 @@ Details on pipeline execution status, 7 workflow stages, and Parquet output spec
 
 ---
 
-### 2.6 Pipeline Execution Monitoring & History (Phase 1)
+### 2.6 Pipeline Execution Monitoring & History (Phase 1 & 2)
 
 #### `GET /api/pipeline/history`
-Returns paginated pipeline execution runs with duration, status, record tallies, and error summaries.
+Returns paginated pipeline execution runs with duration, status, record tallies, error summaries, and database-wide aggregate `stats` (total runs, successful, failed, latest status/runtime).
 - **Query Parameters:** `page` (default 1), `page_size` (default 10, max 100), `status` (`RUNNING`, `SUCCESS`, `FAILED`), `run_type` (`VALIDATION`, `FULL_ETL`).
 
 #### `GET /api/pipeline/history/{run_id}`

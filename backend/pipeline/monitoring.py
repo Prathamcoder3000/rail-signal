@@ -651,3 +651,38 @@ def get_pipeline_run_by_id(run_id: str) -> Optional[Dict[str, Any]]:
         cur.execute(query, (clean_id,))
         row = cur.fetchone()
         return dict(row) if row else None
+
+
+def get_pipeline_history_stats() -> Dict[str, Any]:
+    """
+    Computes database-wide aggregate metrics across all historical pipeline executions.
+    """
+    ensure_pipeline_runs_table()
+    with get_db_cursor() as cur:
+        cur.execute("""
+            SELECT
+                COUNT(*) AS total_runs,
+                COUNT(*) FILTER (WHERE status = 'SUCCESS') AS successful_runs,
+                COUNT(*) FILTER (WHERE status = 'FAILED') AS failed_runs,
+                COUNT(*) FILTER (WHERE status = 'RUNNING') AS running_runs
+            FROM pipeline_runs;
+        """)
+        agg = cur.fetchone()
+
+        cur.execute("""
+            SELECT status, start_time, duration_seconds
+            FROM pipeline_runs
+            ORDER BY created_at DESC
+            LIMIT 1;
+        """)
+        latest = cur.fetchone()
+
+        return {
+            "total_runs": int(agg["total_runs"] or 0),
+            "successful_runs": int(agg["successful_runs"] or 0),
+            "failed_runs": int(agg["failed_runs"] or 0),
+            "running_runs": int(agg["running_runs"] or 0),
+            "latest_run_status": latest["status"] if latest else None,
+            "latest_run_timestamp": latest["start_time"] if latest else None,
+            "latest_run_duration_seconds": float(latest["duration_seconds"]) if latest and latest["duration_seconds"] is not None else None,
+        }

@@ -1,10 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertTriangle, ArrowUpRight, Atom, BarChart3, CheckCircle2, ChevronDown,
   CircleDot, Code2, Cpu, Database, ExternalLink, FileCheck2, FileCode2, GitBranch,
-  Layers, Layers3, Menu, Network, PackageCheck, Palette, RefreshCw, Search, Server,
+  Layers, Layers3, Menu, Network, PackageCheck, Palette, Play, RefreshCw, Search, Server,
   Settings2, ShieldAlert, ShieldCheck, Sparkles, Table2, Terminal, TestTube2,
   TrainFront, X, Zap
 } from 'lucide-react'
@@ -14,7 +14,9 @@ import {
 } from 'recharts'
 import {
   api, API_BASE_URL, checkSystemHealth, DataQualityData, DelayAnalyticsData,
-  OverviewData, PassengerFlowData, PipelineStatusData, SystemHealthInfo,
+  OverviewData, PassengerFlowData, PipelineHistoryResponse, PipelineHistoryStats,
+  PipelineRunDetail, PipelineRunSummary, PipelineRunTriggerResponse,
+  PipelineStageDetail, PipelineStatusData, SystemHealthInfo,
   TrainDetail, TrainItem, TrainListResponse, TrainPerformanceData
 } from '@/lib/api'
 
@@ -1002,14 +1004,308 @@ function Passengers({
 }
 
 // ==============================================================================
-// 4. Data Pipeline Page Component
+// 4. Data Pipeline Page Component & Execution Telemetry Drawer
 // ==============================================================================
+
+function PipelineDetailDrawer({
+  runId,
+  onClose,
+}: {
+  runId: string
+  onClose: () => void
+}) {
+  const [detail, setDetail] = useState<PipelineRunDetail | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError(null)
+
+    api.getPipelineRunDetail(runId)
+      .then((data) => {
+        if (!active) return
+        setDetail(data)
+      })
+      .catch((err: any) => {
+        if (!active) return
+        setError(err?.message || 'Failed to retrieve pipeline run execution details.')
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      active = false
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [runId, onClose])
+
+  const formatTs = (ts?: string | null) => {
+    if (!ts) return '—'
+    try {
+      const d = new Date(ts)
+      return d.toLocaleString()
+    } catch {
+      return ts
+    }
+  }
+
+  return (
+    <div
+      className="drawer-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Execution Telemetry for Run ${runId}`}
+    >
+      <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
+        <div className="drawer-header">
+          <div className="drawer-header-left">
+            <span className="drawer-train-id">{detail?.run_id || runId}</span>
+            <h2 className="drawer-title">{detail?.pipeline_name || 'Railway Data Pipeline'}</h2>
+            <div className="drawer-badges">
+              {detail && (
+                <span className={`pipeline-status-badge status-${detail.status.toLowerCase()}`}>
+                  <span className={`sys-status-indicator pulse-${detail.status === 'SUCCESS' ? 'good' : detail.status === 'FAILED' ? 'error' : 'neutral'}`} />
+                  {detail.status}
+                </span>
+              )}
+              {detail?.run_type && <span className="type-chip">{detail.run_type}</span>}
+              {detail?.trigger_type && <span className="type-chip">{detail.trigger_type}</span>}
+              <SourceBadge source="api-data" />
+            </div>
+          </div>
+          <button className="drawer-close" onClick={onClose} aria-label="Close execution details drawer">
+            <X style={{ width: 16, height: 16 }} />
+          </button>
+        </div>
+
+        <div className="drawer-body">
+          {loading ? (
+            <div className="stops-card" style={{ padding: 28, textAlign: 'center', color: 'var(--muted)' }}>
+              <RefreshCw className="spin" style={{ width: 18, height: 18, margin: '0 auto 8px', display: 'block' }} />
+              <span>Querying PostgreSQL pipeline_runs table for execution telemetry...</span>
+            </div>
+          ) : error ? (
+            <div className="pipeline-alert-banner alert-error">
+              <AlertTriangle style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <div className="pipeline-alert-content">
+                <div className="pipeline-alert-title">Execution Detail Query Failed</div>
+                <p className="pipeline-alert-msg">{error}</p>
+              </div>
+            </div>
+          ) : detail ? (
+            <>
+              {/* KPIs Row */}
+              <div className="drawer-kpis">
+                <div className="drawer-kpi">
+                  <span>Execution Duration</span>
+                  <b>{detail.duration_seconds !== null && detail.duration_seconds !== undefined ? `${detail.duration_seconds.toFixed(2)}s` : '—'}</b>
+                  <small>Recorded runtime</small>
+                </div>
+                <div className="drawer-kpi">
+                  <span>Records Audited</span>
+                  <b>{detail.records_processed ? detail.records_processed.toLocaleString() : '0'}</b>
+                  <small>{detail.records_accepted ? `${detail.records_accepted.toLocaleString()} accepted` : 'Verified records'}</small>
+                </div>
+                <div className="drawer-kpi">
+                  <span>Executed Stages</span>
+                  <b>{detail.stage_details ? `${detail.stage_details.length} / ${detail.stage_count || 4}` : '0'}</b>
+                  <small>{detail.status === 'SUCCESS' ? 'All stages passed' : 'Stages audited'}</small>
+                </div>
+              </div>
+
+              {/* Timing Row */}
+              <div className="drawer-kpi" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <span>Started At</span>
+                  <b style={{ fontSize: 11, fontFamily: 'monospace', marginTop: 4 }}>{formatTs(detail.start_time)}</b>
+                </div>
+                <div>
+                  <span>Finished At</span>
+                  <b style={{ fontSize: 11, fontFamily: 'monospace', marginTop: 4 }}>{formatTs(detail.finish_time)}</b>
+                </div>
+              </div>
+
+              {/* Error Summary Banner (if failed) */}
+              {detail.error_summary && (
+                <div className="pipeline-alert-banner alert-error" style={{ margin: 0 }}>
+                  <AlertTriangle style={{ width: 18, height: 18, flexShrink: 0 }} />
+                  <div className="pipeline-alert-content">
+                    <div className="pipeline-alert-title">
+                      Failed at Stage: {detail.failed_stage || detail.current_stage || 'Unknown'}
+                    </div>
+                    <p className="pipeline-alert-msg" style={{ fontFamily: 'monospace' }}>
+                      {detail.error_summary}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Stage-by-Stage Breakdown */}
+              <div className="stage-timeline">
+                <div className="section-title" style={{ padding: '4px 0 0' }}>
+                  <h2>Stage-by-Stage Telemetry</h2>
+                  <p>Individual stage execution timing, verification parameters, and status</p>
+                </div>
+
+                {detail.stage_details && detail.stage_details.length > 0 ? (
+                  detail.stage_details.map((st, idx) => (
+                    <div className="stage-card" key={st.stage_name || idx}>
+                      <div className="stage-card-head">
+                        <div className="stage-card-title">
+                          <span className="stage-number-badge">0{idx + 1}</span>
+                          <span className="stage-name-text">
+                            {st.stage_name.replace(/^[0-9]+_/, '').replace(/_/g, ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="stage-card-meta">
+                          <span className={`pipeline-status-badge status-${st.status.toLowerCase()}`}>
+                            {st.status}
+                          </span>
+                          {st.duration_seconds !== null && st.duration_seconds !== undefined && (
+                            <span className="stage-duration-tag">
+                              {st.duration_seconds.toFixed(3)}s
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="stage-card-body">
+                        {st.error && (
+                          <div className="stage-error-box">
+                            <strong>Stage Error:</strong> {st.error}
+                          </div>
+                        )}
+
+                        {st.details && Object.keys(st.details).length > 0 ? (
+                          <table className="stage-details-table">
+                            <tbody>
+                              {Object.entries(st.details).map(([k, v]) => (
+                                <tr key={k}>
+                                  <td className="key-col">{k.replace(/_/g, ' ')}</td>
+                                  <td className="val-col">
+                                    {typeof v === 'object' && v !== null ? (
+                                      <pre style={{ margin: 0, fontSize: 10, whiteSpace: 'pre-wrap' }}>
+                                        {JSON.stringify(v, null, 2)}
+                                      </pre>
+                                    ) : (
+                                      String(v)
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <small style={{ color: 'var(--muted)', fontSize: 10.5 }}>
+                            No granular key-value telemetry recorded for this stage.
+                          </small>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="stops-card" style={{ padding: 18, textAlign: 'center', color: 'var(--muted)' }}>
+                    No recorded stage telemetry found for this run.
+                  </div>
+                )}
+              </div>
+
+              {/* Execution Metadata */}
+              {detail.metadata && Object.keys(detail.metadata).length > 0 && (
+                <div className="stage-card">
+                  <div className="stage-card-head">
+                    <span className="stage-name-text">Execution Metadata</span>
+                  </div>
+                  <div className="stage-card-body">
+                    <table className="stage-details-table">
+                      <tbody>
+                        {Object.entries(detail.metadata).map(([k, v]) => (
+                          <tr key={k}>
+                            <td className="key-col">{k.replace(/_/g, ' ')}</td>
+                            <td className="val-col">{String(v)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function Pipeline({
   statusData,
 }: {
   statusData: PipelineStatusData | null
 }) {
+  const [historyData, setHistoryData] = useState<PipelineHistoryResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'SUCCESS' | 'FAILED'>('ALL')
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+
+  // Validation trigger state
+  const [triggerLoading, setTriggerLoading] = useState(false)
+  const [triggerResult, setTriggerResult] = useState<PipelineRunTriggerResponse | null>(null)
+  const [triggerError, setTriggerError] = useState<string | null>(null)
+
+  const fetchHistory = useCallback(async (isManualRefresh = false) => {
+    if (isManualRefresh) setIsRefreshing(true)
+    else setLoading(true)
+    setError(null)
+
+    try {
+      const res = await api.getPipelineHistory({
+        page,
+        page_size: 10,
+        status: statusFilter,
+      })
+      setHistoryData(res)
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load pipeline execution history.')
+    } finally {
+      setLoading(false)
+      setIsRefreshing(false)
+    }
+  }, [page, statusFilter])
+
+  useEffect(() => {
+    fetchHistory()
+  }, [fetchHistory])
+
+  const handleTriggerValidation = async () => {
+    if (triggerLoading) return
+    setTriggerLoading(true)
+    setTriggerResult(null)
+    setTriggerError(null)
+
+    try {
+      const res = await api.triggerPipelineRun({ mode: 'validation' })
+      setTriggerResult(res)
+      // Auto-refresh history table to display the newly logged validation execution
+      fetchHistory(true)
+    } catch (err: any) {
+      setTriggerError(err?.message || 'Validation pipeline execution failed.')
+    } finally {
+      setTriggerLoading(false)
+    }
+  }
+
   const stages = statusData?.stages || [
     { number: '01', label: 'Raw datasets', description: 'CSV · JSON · GeoJSON in data/raw/', status: 'Complete' },
     { number: '02', label: 'Ingestion', description: 'Chunked CSV & GeoJSON parsing', status: 'Complete' },
@@ -1028,18 +1324,306 @@ function Pipeline({
     { name: 'Journey Test', source: 'ir_test.csv (76.01 MB)', format: 'Parquet', records: '375,000', status: 'Loaded' },
   ]
 
+  const stats = historyData?.stats
+  const totalRuns = stats?.total_runs ?? historyData?.total ?? 0
+  const successRuns = stats?.successful_runs ?? 0
+  const failedRuns = stats?.failed_runs ?? 0
+  const latestStatus = stats?.latest_run_status || 'IDLE'
+  const latestDuration = stats?.latest_run_duration_seconds !== null && stats?.latest_run_duration_seconds !== undefined
+    ? `${stats.latest_run_duration_seconds.toFixed(2)}s`
+    : '—'
+  const latestTs = stats?.latest_run_timestamp
+    ? new Date(stats.latest_run_timestamp).toLocaleTimeString()
+    : null
+
+  const items = historyData?.items || []
+  const totalCount = historyData?.total || 0
+  const totalPages = historyData?.total_pages || 1
+
   return (
     <>
       <Header
-        eyebrow="Engineering / Workflow"
-        title="Data engineering pipeline"
-        description="End-to-end data flow: extraction, schema validation, quarantine auditing, Parquet persistence, and PostgreSQL loading."
-        action={<Status>All 7 stages complete</Status>}
+        eyebrow="Engineering / Monitoring & Audit"
+        title="Data pipeline & execution monitoring"
+        description="Live execution telemetry, automated validation engine, and PostgreSQL execution audit trail."
+        action={
+          <div className="pipeline-action-group">
+            <button
+              type="button"
+              className="btn-trigger-validation"
+              onClick={handleTriggerValidation}
+              disabled={triggerLoading}
+              title="Execute safe 4-stage validation pipeline against raw files and database"
+            >
+              {triggerLoading ? (
+                <>
+                  <RefreshCw className="spin btn-icon-accent" style={{ width: 12, height: 12 }} />
+                  <span>Validating 4 Pipeline Stages...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="btn-icon-accent" style={{ width: 12, height: 12 }} fill="var(--lime)" />
+                  <span>Run Pipeline Validation</span>
+                </>
+              )}
+            </button>
+            <Status tone={successRuns > 0 && failedRuns === 0 ? 'good' : failedRuns > 0 ? 'warn' : 'good'}>
+              {stats ? `${totalRuns} executions logged` : 'Monitoring active'}
+            </Status>
+          </div>
+        }
       />
 
+      {/* Validation Result / Alert Banner */}
+      {triggerResult && (
+        <div className="pipeline-alert-banner alert-success">
+          <CheckCircle2 style={{ width: 18, height: 18, flexShrink: 0, color: '#385612' }} />
+          <div className="pipeline-alert-content">
+            <div className="pipeline-alert-title">
+              <span>Pipeline Validation Succeeded:</span>
+              <span className="run-id-code">{triggerResult.run_id}</span>
+            </div>
+            <p className="pipeline-alert-msg">
+              {triggerResult.message} Recorded execution duration: <b>{triggerResult.duration_seconds !== null && triggerResult.duration_seconds !== undefined ? `${triggerResult.duration_seconds.toFixed(2)}s` : '—'}</b>.
+            </p>
+            <div className="pipeline-alert-actions">
+              <button
+                type="button"
+                className="btn-alert-inspect"
+                onClick={() => setSelectedRunId(triggerResult.run_id)}
+              >
+                Inspect Telemetry Details →
+              </button>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn-alert-close"
+            onClick={() => setTriggerResult(null)}
+            aria-label="Dismiss banner"
+          >
+            <X style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+      )}
+
+      {triggerError && (
+        <div className="pipeline-alert-banner alert-error">
+          <AlertTriangle style={{ width: 18, height: 18, flexShrink: 0, color: '#8e2b26' }} />
+          <div className="pipeline-alert-content">
+            <div className="pipeline-alert-title">Pipeline Execution Request Failed</div>
+            <p className="pipeline-alert-msg">{triggerError}</p>
+          </div>
+          <button
+            type="button"
+            className="btn-alert-close"
+            onClick={() => setTriggerError(null)}
+            aria-label="Dismiss banner"
+          >
+            <X style={{ width: 14, height: 14 }} />
+          </button>
+        </div>
+      )}
+
+      {/* Overview KPI Cards (Database-wide aggregate metrics from /api/pipeline/history stats) */}
+      <div className="kpi-grid">
+        <Kpi
+          label="Total Recorded Runs"
+          value={loading && !historyData ? '...' : totalRuns.toLocaleString()}
+          detail="Total executions in PostgreSQL pipeline_runs"
+          icon={GitBranch}
+        />
+        <Kpi
+          label="Successful Executions"
+          value={loading && !historyData ? '...' : successRuns.toLocaleString()}
+          detail="Verified automated validation runs"
+          icon={ShieldCheck}
+          accent
+        />
+        <Kpi
+          label="Failed Executions"
+          value={loading && !historyData ? '...' : failedRuns.toLocaleString()}
+          detail="Recorded pipeline errors or exceptions"
+          icon={AlertTriangle}
+        />
+        <Kpi
+          label="Latest Execution"
+          value={loading && !historyData ? '...' : latestStatus}
+          detail={latestDuration !== '—' ? `${latestDuration} runtime${latestTs ? ` · ${latestTs}` : ''}` : 'No recent execution'}
+          icon={Activity}
+        />
+      </div>
+
+      {/* Execution History Table Card */}
+      <Card className="table-card">
+        <div className="table-toolbar">
+          <SectionTitle
+            title="Pipeline execution history & audit trail"
+            detail={`Live PostgreSQL telemetry · Page ${page} of ${totalPages} · ${totalCount.toLocaleString()} total logged runs`}
+            source="api-data"
+          />
+          <div className="table-controls">
+            <div className="history-filter-group" role="group" aria-label="Status filter">
+              {(['ALL', 'SUCCESS', 'FAILED'] as const).map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  className={`filter-pill ${statusFilter === st ? 'active' : ''}`}
+                  onClick={() => {
+                    setStatusFilter(st)
+                    setPage(1)
+                  }}
+                >
+                  {st === 'ALL' ? 'All Runs' : st}
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              className="refresh-btn"
+              onClick={() => fetchHistory(true)}
+              disabled={isRefreshing || loading}
+              title="Refresh execution history"
+            >
+              <RefreshCw className={isRefreshing ? 'spin' : ''} style={{ width: 11, height: 11 }} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Run ID</th>
+                <th>Pipeline / Mode</th>
+                <th>Trigger</th>
+                <th>Status</th>
+                <th>Started At</th>
+                <th>Duration</th>
+                <th>Telemetry</th>
+                <th>Error Summary</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && !items.length ? (
+                <tr>
+                  <td colSpan={9} className="empty-cell">
+                    <RefreshCw className="spin" style={{ width: 16, height: 16, margin: '0 auto 6px', display: 'block' }} />
+                    Loading pipeline execution history from database...
+                  </td>
+                </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={9} className="empty-cell" style={{ color: 'var(--red)' }}>
+                    {error}
+                    <div style={{ marginTop: 8 }}>
+                      <button type="button" className="refresh-btn" onClick={() => fetchHistory(false)}>
+                        Retry Connection
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ) : items.length ? (
+                items.map((r) => (
+                  <tr
+                    key={r.run_id}
+                    className="table-row-clickable"
+                    onClick={() => setSelectedRunId(r.run_id)}
+                    title="Click row to view complete execution stage details"
+                  >
+                    <td>
+                      <span className="run-id-code">{r.run_id}</span>
+                      <small>{r.pipeline_name}</small>
+                    </td>
+                    <td>
+                      <span className="type-chip">{r.run_type}</span>
+                    </td>
+                    <td>
+                      <small style={{ fontWeight: 600, color: 'var(--muted)' }}>{r.trigger_type}</small>
+                    </td>
+                    <td>
+                      <span className={`pipeline-status-badge status-${r.status.toLowerCase()}`}>
+                        <span className={`sys-status-indicator pulse-${r.status === 'SUCCESS' ? 'good' : r.status === 'FAILED' ? 'error' : 'neutral'}`} />
+                        {r.status}
+                      </span>
+                    </td>
+                    <td>
+                      <b>{new Date(r.start_time).toLocaleDateString()}</b>
+                      <small>{new Date(r.start_time).toLocaleTimeString()}</small>
+                    </td>
+                    <td>
+                      {r.duration_seconds !== null && r.duration_seconds !== undefined
+                        ? `${r.duration_seconds.toFixed(2)}s`
+                        : '—'}
+                    </td>
+                    <td>
+                      <b>{r.records_processed.toLocaleString()} records</b>
+                      <small>{r.stage_count} stages executed</small>
+                    </td>
+                    <td>
+                      {r.error_summary ? (
+                        <small style={{ color: 'var(--red)', fontWeight: 600, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {r.error_summary}
+                        </small>
+                      ) : (
+                        <small style={{ color: '#7b8376' }}>None (Passed)</small>
+                      )}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="inspect-btn"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setSelectedRunId(r.run_id)
+                        }}
+                        aria-label={`Inspect telemetry for run ${r.run_id}`}
+                      >
+                        <CircleDot style={{ width: 10, height: 10 }} />
+                        Inspect
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className="empty-cell">
+                    No pipeline runs recorded in the database matching status &quot;{statusFilter}&quot;.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pagination">
+          <span>
+            Showing {items.length ? (page - 1) * 10 + 1 : 0}–{Math.min(page * 10, totalCount)} of {totalCount.toLocaleString()} recorded runs
+          </span>
+          <div>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Conceptual Pipeline Architecture & Flow */}
       <Card className="pipeline-card">
         <SectionTitle
-          title="Pipeline architecture & stages"
+          title="Pipeline architecture & verified stages"
           detail="Modular, idempotent Python ETL pipeline with atomic write safeguards"
         />
         <div className="pipeline-flow">
@@ -1057,6 +1641,7 @@ function Pipeline({
         </div>
       </Card>
 
+      {/* Dataset Storage & Loading Summary Card */}
       <Card className="table-card">
         <SectionTitle
           title="Dataset storage & loading summary"
@@ -1088,17 +1673,13 @@ function Pipeline({
         </div>
       </Card>
 
-      <Card className="empty-run">
-        <div className="empty-icon"><CheckCircle2 /></div>
-        <div>
-          <h3>Pipeline Execution Status: Success</h3>
-          <p>
-            Last successful execution: {statusData?.last_run_timestamp ? new Date(statusData.last_run_timestamp).toLocaleString() : '2026-10-14 14:17:47 UTC'}.
-            Total records processed: 2,283,664 accepted rows written to Parquet and loaded into database.
-          </p>
-        </div>
-        <SourceBadge source="api-data" />
-      </Card>
+      {/* Detail Drawer */}
+      {selectedRunId && (
+        <PipelineDetailDrawer
+          runId={selectedRunId}
+          onClose={() => setSelectedRunId(null)}
+        />
+      )}
     </>
   )
 }

@@ -102,10 +102,19 @@ To satisfy academic safety requirements and guarantee zero data loss, the platfo
       "created_at": "2026-10-27T12:31:33.118095Z"
     }
   ],
-  "total": 1,
+  "total": 19,
   "page": 1,
   "page_size": 10,
-  "total_pages": 1
+  "total_pages": 2,
+  "stats": {
+    "total_runs": 19,
+    "successful_runs": 13,
+    "failed_runs": 6,
+    "running_runs": 0,
+    "latest_run_status": "SUCCESS",
+    "latest_run_timestamp": "2026-10-27T12:48:17.919262Z",
+    "latest_run_duration_seconds": 3.358
+  }
 }
 ```
 
@@ -261,7 +270,36 @@ To satisfy academic safety requirements and guarantee zero data loss, the platfo
 
 ---
 
-## 6. How to Test Locally
+---
+
+## 6. Frontend Integration & UI Architecture (Phase 2)
+
+Phase 2 connects the Next.js frontend to the authoritative PostgreSQL pipeline monitoring endpoints:
+
+### Features & User Workflows:
+1. **Real-Time Aggregate KPI Cards:**
+   - Populated from `stats` in `GET /api/pipeline/history`.
+   - Displays database-wide metrics: Total Recorded Runs, Successful Runs, Failed Runs, and Latest Execution Status & Duration.
+2. **Interactive Pipeline Validation Trigger:**
+   - Prominently placed in the page header: **"Run Pipeline Validation"**.
+   - Disabled with a spinner during execution to prevent duplicate triggers.
+   - Invokes `POST /api/pipeline/run` with `{"mode": "validation"}`.
+   - Displays a dismissible success banner with the generated run ID, execution duration, and an "Inspect Telemetry Details →" button.
+   - Automatically refreshes the execution history table upon completion.
+3. **Execution History Audit Trail Table:**
+   - Displays real records from PostgreSQL `pipeline_runs`.
+   - Columns: Run ID, Pipeline / Mode, Trigger Type, Status Badge (SUCCESS/FAILED/RUNNING), Started At, Duration, Telemetry (records & stage count), Error Summary, and "Inspect" Action.
+   - Features status filter pills (`All Runs`, `SUCCESS`, `FAILED`) and manual refresh button.
+   - Server-side pagination controls (`Previous`, `Page X of Y`, `Next`).
+4. **Execution Telemetry Detail Drawer (`PipelineDetailDrawer`):**
+   - Slide-over drawer accessible by clicking any table row or "Inspect" button.
+   - Retrieves telemetry via `GET /api/pipeline/history/{run_id}`.
+   - Displays overall duration, record counts, and timestamps.
+   - Renders stage-by-stage cards with durations, parameters (e.g. database row counts, verified file sizes), and formatted error diagnostics if failed.
+
+---
+
+## 7. How to Test Locally
 
 ### Running Automated Test Suite
 Execute the dedicated monitoring test suite:
@@ -274,12 +312,22 @@ Execute all 66 tests across the entire repository:
 python -m pytest -v
 ```
 
-### Interactive API Testing
+### Running Frontend Validation
+In `frontend/`:
+```powershell
+pnpm exec tsc --noEmit
+pnpm build
+```
+
+### End-to-End Verification
 1. Start the FastAPI backend:
    ```powershell
    python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
    ```
-2. Open Swagger UI at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
-3. Test `POST /api/pipeline/run` with `{"mode": "validation"}`.
-4. Test `GET /api/pipeline/history` to view the newly logged execution.
-5. Test `GET /api/pipeline/history/{run_id}` with the returned run ID.
+2. Start the Next.js frontend:
+   ```powershell
+   cd frontend
+   pnpm start
+   ```
+3. Navigate to [http://localhost:3000](http://localhost:3000) and click **Data Pipeline** in the sidebar.
+4. Click **Run Pipeline Validation** to trigger live execution and inspect the resulting telemetry drawer.

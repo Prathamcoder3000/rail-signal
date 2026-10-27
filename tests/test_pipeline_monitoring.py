@@ -160,6 +160,9 @@ def test_get_pipeline_history_endpoint():
     assert "total" in data
     assert "page" in data
     assert "page_size" in data
+    assert "stats" in data
+    assert data["stats"]["total_runs"] >= 1
+    assert data["stats"]["successful_runs"] >= 0
     assert data["page"] == 1
     assert data["page_size"] == 5
     assert data["total"] >= 1

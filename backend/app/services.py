@@ -23,6 +23,7 @@ from backend.app.schemas import (
     PassengerTypeUtilisation,
     PassengerUtilisationSummary,
     PipelineHistoryResponse,
+    PipelineHistoryStats,
     PipelineRunDetail,
     PipelineRunSummary,
     PipelineRunTriggerResponse,
@@ -39,6 +40,7 @@ from backend.app.schemas import (
 )
 from backend.pipeline.monitoring import (
     execute_validation_pipeline,
+    get_pipeline_history_stats,
     get_pipeline_run_by_id,
     get_pipeline_runs,
 )
@@ -691,12 +693,16 @@ def get_pipeline_history_service(
             )
         )
 
+    stats_dict = get_pipeline_history_stats()
+    stats = PipelineHistoryStats(**stats_dict)
+
     return PipelineHistoryResponse(
         items=items,
         total=total_count,
         page=page,
         page_size=page_size,
         total_pages=total_pages,
+        stats=stats,
     )
 
 
