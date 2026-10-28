@@ -184,13 +184,14 @@ Database name: `rail_signal`
 Start the backend server on port 8000:
 
 ```powershell
-uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `GET` | `/api/health` | System health check, database connectivity, and table counts |
-| `GET` | `/api/overview` | Executive KPIs, delay distribution, train categories, and freshness |
+| `GET` | `/api/overview` | Executive KPIs, table distributions, state density, delay stats, and latest pipeline status |
+| `GET` | `/api/pipelines` | Registered pipeline catalog with source/target metadata, run counts, and execution metrics |
 | `GET` | `/api/trains` | Search, category filter (`train_type`), zone filter (`zone`), sorting (`sort_by`, `sort_order`), and pagination |
 | `GET` | `/api/trains/{train_number}` | Train details and complete sequence of scheduled stops & waypoints |
 | `GET` | `/api/analytics/train-performance` | Average distance and duration breakdown by train type |
@@ -198,7 +199,7 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
 | `GET` | `/api/analytics/passenger-flow` | Average seat utilisation and 4-band distribution (`0–50%`, `50–75%`, `75–100%`, `100%+`) |
 | `GET` | `/api/data-quality` | Accepted vs. quarantined records per dataset and rejection reasons |
 | `GET` | `/api/pipeline/status` | Workflow stages, execution metadata, and output file sizes |
-| `GET` | `/api/pipeline/history` | Paginated execution history with duration, status, and record counts |
+| `GET` | `/api/pipeline/history` | Paginated execution history with pipeline name filtering, duration, status, and record counts |
 | `GET` | `/api/pipeline/history/{run_id}` | Granular stage-level execution telemetry, timings, and recorded outcomes |
 | `POST` | `/api/pipeline/run` | Safe, non-destructive pipeline validation trigger (prerequisite & integrity audit) |
 
@@ -219,10 +220,10 @@ pnpm dev
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Dashboard Sections & Features:
-1. **Overview:** Network topology schematic, key operational metrics, journey delay donut chart, processing summary, and live database metric refresh.
-2. **Train Performance:** Searchable, filterable table across 5,207 trains with zone filtering (e.g. WR, NR, CR), multi-column sorting (distance, duration, name, number), and an interactive **Train Detail Drawer** displaying complete stop schedules, waypoints, day of journey, arrival/departure times, and stop filtering.
-3. **Passenger Flow:** Seat utilisation averages, train-category comparisons, four occupancy bands, and clear educational provenance disclaimers distinguishing synthetic model parameters from physical CRIS counts.
-4. **Data Pipeline & Execution Monitoring:** Live pipeline monitoring dashboard backed by PostgreSQL `pipeline_runs`. Features real aggregate execution metrics (total, successful, failed, latest runtime), interactive safe 4-stage validation execution (`POST /api/pipeline/run`), filterable execution history audit trail with pagination and manual refresh, and an interactive **Execution Telemetry Drawer** displaying stage-by-stage timings, verified record counts (2,283,664 rows), and diagnostics.
+1. **Overview:** Executive KPIs (Stations, Trains, Schedules, Journeys, Pipeline status, Data Quality rate), relational database record count chart, station geographic distribution by state, network topology schematic, train category profiles, and journey delay distribution.
+2. **ETL Flow:** Dedicated full-pipeline visualization mapping the 8 operational stages (`Raw Data Sources` -> `Extract` -> `Transform` -> `Validate` -> `Parquet Storage` -> `PostgreSQL Loading` -> `SQL Analytics` -> `Operations Dashboard`). Features stage status badges, throughput counts, measured latencies, technical telemetry drawer, and a safe, non-destructive validation trigger backed by PostgreSQL advisory locking.
+3. **Data Pipelines:** Pipeline Catalog Grid displaying the 5 registered production pipelines with purpose, datasets, target tables, success rates, and average durations. Features an execution history table with pipeline and status filtering, pagination, and a telemetry inspection drawer.
+4. **Analytics:** Comprehensive analytical explorer uniting Train Performance (timetable search & stop drawer), Geographic & Zone Distribution (density across 34 states/UTs and 16 zones), Delay Analytics (punctuality ratios & volume charts), and Passenger Utilisation (capacity bands & category profiles).
 5. **Data Quality:** Quarantine audit summary detailing 22,614 isolated records and documented rejection reasons (e.g. missing station code or invalid day numbers).
 6. **Technology Stack:** Curated 20-technology architectural registry verified against source manifests, category filters, and live System Health diagnostics.
 
@@ -233,26 +234,14 @@ RAIL / SIGNAL is designed as an educational, read-only railway data engineering 
 
 ## 🧪 Automated Testing
 
-Execute the complete Python test suite (120 tests across 12 modules):
+Execute the complete Python test suite (143 tests across 12 modules):
 
 ```powershell
-python -m pytest tests -v
+python -m pytest tests -q
 ```
 
 ```text
-tests/test_advisory_lock.py (4 passed)
-tests/test_api.py (10 passed)
-tests/test_database_loader.py (4 passed)
-tests/test_db_pool.py (11 passed)
-tests/test_ingestion.py (8 passed)
-tests/test_logging.py (6 passed)
-tests/test_metrics.py (2 passed)
-tests/test_orchestrator.py (22 passed)
-tests/test_pipeline_monitoring.py (12 passed)
-tests/test_schema_manager.py (8 passed)
-tests/test_transformation.py (13 passed)
-tests/test_validation.py (20 passed)
-============================ 120 passed in 25.36s =============================
+143 passed in 29.92s
 ```
 
 Execute frontend TypeScript and build checks:

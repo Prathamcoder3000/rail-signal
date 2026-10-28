@@ -13,6 +13,7 @@ from backend.app.config import settings
 from backend.app.db import check_db_health, get_db_cursor
 from backend.app.schemas import (
     DataQualityResponse,
+    DatasetDistributionItem,
     DatasetQualityItem,
     DelayAnalyticsResponse,
     DelaySummary,
@@ -22,8 +23,11 @@ from backend.app.schemas import (
     PassengerFlowResponse,
     PassengerTypeUtilisation,
     PassengerUtilisationSummary,
+    PipelineCatalogItem,
+    PipelineCatalogResponse,
     PipelineHistoryResponse,
     PipelineHistoryStats,
+    PipelineOutcomeStat,
     PipelineRunDetail,
     PipelineRunSummary,
     PipelineRunTriggerResponse,
@@ -31,6 +35,7 @@ from backend.app.schemas import (
     PipelineStageDetail,
     PipelineStatusResponse,
     ScheduleStop,
+    StationDistributionItem,
     TrainDetailResponse,
     TrainItem,
     TrainListResponse,
@@ -40,6 +45,7 @@ from backend.app.schemas import (
 )
 from backend.pipeline.monitoring import (
     execute_validation_pipeline,
+    get_pipeline_catalog,
     get_pipeline_history_stats,
     get_pipeline_run_by_id,
     get_pipeline_runs,
@@ -210,7 +216,79 @@ def get_overview_data() -> OverviewResponse:
             provenance_note="Simulated occupancy parameter from educational modeling dataset; does not reflect CRIS physical passenger counts.",
         )
 
-    # 5. Quality summary from quality_report.json
+        # 5. Station distribution by state
+        cur.execute("""
+            SELECT state AS name, COUNT(*) AS count
+            FROM stations
+            WHERE state IS NOT NULL AND state != ''
+            GROUP BY state
+            ORDER BY count DESC
+            LIMIT 10;
+        """)
+        state_rows = cur.fetchall()
+        station_states = [StationDistributionItem(name=r["name"], count=int(r["count"])) for r in state_rows]
+
+        # 6. Station distribution by zone
+        cur.execute("""
+            SELECT zone AS name, COUNT(*) AS count
+            FROM stations
+            WHERE zone IS NOT NULL AND zone != ''
+            GROUP BY zone
+            ORDER BY count DESC
+            LIMIT 8;
+        """)
+        zone_rows = cur.fetchall()
+        station_zones = [StationDistributionItem(name=r["name"], count=int(r["count"])) for r in zone_rows]
+
+        # 7. Dataset distribution
+        dataset_dist = [
+            DatasetDistributionItem(table="journey_train", label="Journey Train", count=j_train, source="ir_train.csv (337.2 MB)"),
+            DatasetDistributionItem(table="schedules", label="Schedules", count=schedules_count, source="schedules.json (82.2 MB)"),
+            DatasetDistributionItem(table="journey_test", label="Journey Test", count=j_test, source="ir_test.csv (76.0 MB)"),
+            DatasetDistributionItem(table="stations", label="Stations", count=stations_count, source="stations.json (1.86 MB)"),
+            DatasetDistributionItem(table="trains", label="Trains", count=trains_count, source="trains.json (14.8 MB)"),
+        ]
+
+        # 8. Pipeline outcomes and latest run
+        pipeline_outcomes: List[PipelineOutcomeStat] = []
+        latest_pipeline_run: Optional[Dict[str, Any]] = None
+        try:
+            cur.execute("""
+                SELECT
+                    status,
+                    COUNT(*) AS count,
+                    ROUND((100.0 * COUNT(*) / (SELECT NULLIF(COUNT(*), 0) FROM pipeline_runs))::NUMERIC, 1) AS percentage
+                FROM pipeline_runs
+                GROUP BY status
+                ORDER BY count DESC;
+            """)
+            outcome_rows = cur.fetchall()
+            pipeline_outcomes = [
+                PipelineOutcomeStat(
+                    status=r["status"],
+                    count=int(r["count"]),
+                    percentage=float(r["percentage"] or 0),
+                )
+                for r in outcome_rows
+            ]
+
+            cur.execute("""
+                SELECT run_id, pipeline_name, run_type, status, start_time, duration_seconds, records_processed, error_summary
+                FROM pipeline_runs
+                ORDER BY created_at DESC
+                LIMIT 1;
+            """)
+            latest_run_row = cur.fetchone()
+            if latest_run_row:
+                latest_pipeline_run = dict(latest_run_row)
+                if latest_pipeline_run.get("start_time"):
+                    latest_pipeline_run["start_time"] = latest_pipeline_run["start_time"].isoformat()
+                if latest_pipeline_run.get("duration_seconds") is not None:
+                    latest_pipeline_run["duration_seconds"] = float(latest_pipeline_run["duration_seconds"])
+        except Exception as p_err:
+            logger.warning("Could not fetch pipeline outcomes for overview: %s", p_err)
+
+    # 9. Quality summary from quality_report.json
     q_data = load_quality_report_json()
     freshness = q_data.get("run_timestamp", datetime.now(timezone.utc).isoformat())
 
@@ -221,6 +299,11 @@ def get_overview_data() -> OverviewResponse:
         passenger_utilisation_summary=passenger_summary,
         quality_summary=q_data,
         data_freshness=freshness,
+        station_state_distribution=station_states,
+        station_zone_distribution=station_zones,
+        dataset_distribution=dataset_dist,
+        pipeline_outcomes=pipeline_outcomes,
+        latest_pipeline_run=latest_pipeline_run,
     )
 
 
@@ -660,6 +743,7 @@ def get_pipeline_history_service(
     page_size: int = 10,
     status: Optional[str] = None,
     run_type: Optional[str] = None,
+    pipeline_name: Optional[str] = None,
 ) -> PipelineHistoryResponse:
     """Retrieves paginated pipeline execution runs with metadata and stage counts."""
     rows, total_count = get_pipeline_runs(
@@ -667,6 +751,7 @@ def get_pipeline_history_service(
         page_size=page_size,
         status=status,
         run_type=run_type,
+        pipeline_name=pipeline_name,
     )
     total_pages = max(1, math.ceil(total_count / page_size)) if total_count else 1
 
@@ -801,5 +886,15 @@ def trigger_validation_pipeline_service(mode: str = "validation") -> PipelineRun
         ),
         duration_seconds=result["duration_seconds"],
         summary=summary,
+    )
+
+
+def get_pipeline_catalog_service() -> PipelineCatalogResponse:
+    """Returns the registered pipeline catalog with live execution statistics and latest status."""
+    raw_catalog = get_pipeline_catalog()
+    items = [PipelineCatalogItem(**p) for p in raw_catalog]
+    return PipelineCatalogResponse(
+        pipelines=items,
+        total_registered=len(items),
     )
 

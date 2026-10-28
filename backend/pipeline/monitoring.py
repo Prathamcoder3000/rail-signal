@@ -582,6 +582,7 @@ def get_pipeline_runs(
     page_size: int = 10,
     status: Optional[str] = None,
     run_type: Optional[str] = None,
+    pipeline_name: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
     Retrieves a paginated list of historical pipeline execution runs from PostgreSQL.
@@ -594,13 +595,17 @@ def get_pipeline_runs(
     filters: List[str] = []
     params: List[Any] = []
 
-    if status and status.strip():
+    if status and status.strip() and status.strip().upper() != "ALL":
         filters.append("status = %s")
         params.append(status.strip().upper())
 
-    if run_type and run_type.strip():
+    if run_type and run_type.strip() and run_type.strip().upper() != "ALL":
         filters.append("run_type = %s")
         params.append(run_type.strip().upper())
+
+    if pipeline_name and pipeline_name.strip() and pipeline_name.strip().upper() != "ALL":
+        filters.append("pipeline_name ILIKE %s")
+        params.append(f"%{pipeline_name.strip()}%")
 
     where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
 
@@ -686,3 +691,147 @@ def get_pipeline_history_stats() -> Dict[str, Any]:
             "latest_run_timestamp": latest["start_time"] if latest else None,
             "latest_run_duration_seconds": float(latest["duration_seconds"]) if latest and latest["duration_seconds"] is not None else None,
         }
+
+
+def get_pipeline_catalog() -> List[Dict[str, Any]]:
+    """
+    Returns registered pipeline catalog definitions enriched with live execution
+    statistics, latest status, duration, and success rates from PostgreSQL pipeline_runs.
+    """
+    ensure_pipeline_runs_table()
+
+    specs = [
+        {
+            "pipeline_name": "rail_signal_orchestrator",
+            "aliases": ["rail_signal_orchestrator"],
+            "display_name": "Unified ETL Orchestration Engine",
+            "run_type": "FULL_ETL",
+            "purpose": "Coordinates end-to-end extraction, schema validation, transformation, quality quarantine, atomic database loading, and post-load verification.",
+            "source_datasets": ["stations.json", "trains.json", "schedules.json", "ir_train.csv", "ir_test.csv"],
+            "destination_targets": ["stations", "trains", "schedules", "journey_train", "journey_test", "data/processed/*.parquet"],
+            "is_schedulable": True,
+        },
+        {
+            "pipeline_name": "rail_signal_validation",
+            "aliases": ["rail_signal_validation", "RAIL / SIGNAL Validation Pipeline"],
+            "display_name": "Automated Integrity Audit Pipeline",
+            "run_type": "VALIDATION",
+            "purpose": "Automated 4-stage integrity audit of environment configuration, raw source files, 2,283,664 PostgreSQL database rows, and processed Parquet storage artifacts.",
+            "source_datasets": ["data/raw/", "rail_signal (PostgreSQL)", "data/processed/"],
+            "destination_targets": ["pipeline_runs (audit table)", "data/processed/pipeline_runs.jsonl"],
+            "is_schedulable": True,
+        },
+        {
+            "pipeline_name": "rail_signal_schema_validate",
+            "aliases": ["rail_signal_schema_validate"],
+            "display_name": "Schema & Constraint Verification Pipeline",
+            "run_type": "SCHEMA_VALIDATE",
+            "purpose": "Validates database tables, expected column counts, primary keys, and data types against architectural specifications.",
+            "source_datasets": ["PostgreSQL system catalog (information_schema)"],
+            "destination_targets": ["Schema validation telemetry"],
+            "is_schedulable": True,
+        },
+        {
+            "pipeline_name": "rail_signal_schema_init",
+            "aliases": ["rail_signal_schema_init"],
+            "display_name": "Idempotent Schema Initialization Pipeline",
+            "run_type": "SCHEMA_INIT",
+            "purpose": "Applies DDL scripts idempotently to initialize core railway tables, sequences, indexes, and audit structures under dedicated advisory locks.",
+            "source_datasets": ["sql/schema/00_init.sql", "sql/schema/01_pipeline_runs.sql"],
+            "destination_targets": ["PostgreSQL public schema DDL"],
+            "is_schedulable": False,
+        },
+        {
+            "pipeline_name": "rail_signal_preflight",
+            "aliases": ["rail_signal_preflight"],
+            "display_name": "Preflight System Readiness Audit",
+            "run_type": "INSPECT",
+            "purpose": "Audits execution prerequisites, environment configurations, filesystem permissions, raw source availability, and database connection pool hygiene.",
+            "source_datasets": [".env", "data/raw/"],
+            "destination_targets": ["Preflight diagnostics report"],
+            "is_schedulable": True,
+        },
+    ]
+
+    with get_db_cursor() as cur:
+        cur.execute("""
+            SELECT
+                pipeline_name,
+                COUNT(*) AS total_runs,
+                COUNT(*) FILTER (WHERE status = 'SUCCESS') AS successful_runs,
+                COUNT(*) FILTER (WHERE status = 'FAILED') AS failed_runs,
+                MAX(start_time) AS latest_run_time,
+                MAX(CASE WHEN status = 'SUCCESS' THEN start_time END) AS last_success_time,
+                ROUND(AVG(duration_seconds)::NUMERIC, 3) AS avg_duration_seconds
+            FROM pipeline_runs
+            GROUP BY pipeline_name;
+        """)
+        stats_by_name = {r["pipeline_name"]: dict(r) for r in cur.fetchall()}
+
+        cur.execute("""
+            SELECT DISTINCT ON (pipeline_name)
+                pipeline_name, status, duration_seconds, error_summary, start_time
+            FROM pipeline_runs
+            ORDER BY pipeline_name, created_at DESC;
+        """)
+        latest_by_name = {r["pipeline_name"]: dict(r) for r in cur.fetchall()}
+
+    catalog: List[Dict[str, Any]] = []
+    for spec in specs:
+        aliases = spec["aliases"]
+        total_runs = 0
+        successful_runs = 0
+        failed_runs = 0
+        latest_run_time = None
+        last_success_time = None
+        avg_durations: List[float] = []
+        latest_status = "IDLE"
+        latest_duration: Optional[float] = None
+        failure_summary: Optional[str] = None
+
+        for alias in aliases:
+            if alias in stats_by_name:
+                st = stats_by_name[alias]
+                total_runs += int(st["total_runs"] or 0)
+                successful_runs += int(st["successful_runs"] or 0)
+                failed_runs += int(st["failed_runs"] or 0)
+                if st["latest_run_time"]:
+                    if latest_run_time is None or st["latest_run_time"] > latest_run_time:
+                        latest_run_time = st["latest_run_time"]
+                if st["last_success_time"]:
+                    if last_success_time is None or st["last_success_time"] > last_success_time:
+                        last_success_time = st["last_success_time"]
+                if st["avg_duration_seconds"] is not None:
+                    avg_durations.append(float(st["avg_duration_seconds"]))
+
+            if alias in latest_by_name:
+                lt = latest_by_name[alias]
+                if latest_status == "IDLE" or (latest_run_time and lt["start_time"] == latest_run_time):
+                    latest_status = lt["status"]
+                    latest_duration = float(lt["duration_seconds"]) if lt["duration_seconds"] is not None else None
+                    failure_summary = lt["error_summary"]
+
+        avg_dur = round(sum(avg_durations) / len(avg_durations), 3) if avg_durations else None
+        success_rate = round(100.0 * successful_runs / total_runs, 1) if total_runs > 0 else 0.0
+
+        catalog.append({
+            "pipeline_name": spec["pipeline_name"],
+            "display_name": spec["display_name"],
+            "run_type": spec["run_type"],
+            "purpose": spec["purpose"],
+            "source_datasets": spec["source_datasets"],
+            "destination_targets": spec["destination_targets"],
+            "current_status": latest_status,
+            "last_execution_time": latest_run_time,
+            "last_success_time": last_success_time,
+            "latest_duration_seconds": latest_duration,
+            "avg_duration_seconds": avg_dur,
+            "total_runs": total_runs,
+            "successful_runs": successful_runs,
+            "failed_runs": failed_runs,
+            "success_rate_pct": success_rate,
+            "failure_summary": sanitize_error_message(failure_summary) if failure_summary else None,
+            "is_schedulable": spec["is_schedulable"],
+        })
+
+    return catalog

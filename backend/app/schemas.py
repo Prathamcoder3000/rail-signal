@@ -53,6 +53,24 @@ class PassengerUtilisationSummary(BaseModel):
     provenance_note: str
 
 
+class StationDistributionItem(BaseModel):
+    name: str
+    count: int
+
+
+class DatasetDistributionItem(BaseModel):
+    table: str
+    label: str
+    count: int
+    source: str
+
+
+class PipelineOutcomeStat(BaseModel):
+    status: str
+    count: int
+    percentage: float
+
+
 class OverviewResponse(BaseModel):
     kpis: OverviewKpis
     delay_summary: DelaySummary
@@ -60,6 +78,11 @@ class OverviewResponse(BaseModel):
     passenger_utilisation_summary: PassengerUtilisationSummary
     quality_summary: Dict[str, Any]
     data_freshness: str
+    station_state_distribution: List[StationDistributionItem] = Field(default_factory=list)
+    station_zone_distribution: List[StationDistributionItem] = Field(default_factory=list)
+    dataset_distribution: List[DatasetDistributionItem] = Field(default_factory=list)
+    pipeline_outcomes: List[PipelineOutcomeStat] = Field(default_factory=list)
+    latest_pipeline_run: Optional[Dict[str, Any]] = None
 
 
 # ==============================================================================
@@ -281,4 +304,34 @@ class PipelineRunTriggerResponse(BaseModel):
     message: str
     duration_seconds: Optional[float] = None
     summary: PipelineRunSummary
+
+
+# ==============================================================================
+# Pipeline Catalog & Metadata (Priority 2)
+# ==============================================================================
+
+class PipelineCatalogItem(BaseModel):
+    pipeline_name: str
+    display_name: str
+    run_type: str
+    purpose: str
+    source_datasets: List[str]
+    destination_targets: List[str]
+    current_status: str
+    last_execution_time: Optional[datetime] = None
+    last_success_time: Optional[datetime] = None
+    latest_duration_seconds: Optional[float] = None
+    avg_duration_seconds: Optional[float] = None
+    total_runs: int = 0
+    successful_runs: int = 0
+    failed_runs: int = 0
+    success_rate_pct: float = 0.0
+    failure_summary: Optional[str] = None
+    is_schedulable: bool = True
+
+
+class PipelineCatalogResponse(BaseModel):
+    pipelines: List[PipelineCatalogItem]
+    total_registered: int
+    authoritative_store: str = "PostgreSQL (rail_signal.public.pipeline_runs)"
 

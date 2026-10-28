@@ -28,9 +28,10 @@ Thumbs.db
 .coverage
 htmlcov/
 
-# Logs
+# Logs & Diff artifacts
 *.log
 logs/
+*.diff
 
 # Large Raw Datasets & Ingestion Outputs (protect git repo from hundreds of MBs)
 data/raw/*.zip

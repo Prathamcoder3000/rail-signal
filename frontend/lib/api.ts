@@ -3,6 +3,8 @@
  * Connects to the FastAPI backend with environment-driven base URL and safe fallbacks.
  */
 
+import { formatNumber, formatTime } from './formatters'
+
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 
@@ -23,6 +25,24 @@ export type HealthStatus = {
     journey_train: number
     journey_test: number
   }
+}
+
+export type StationDistributionItem = {
+  name: string
+  count: number
+}
+
+export type DatasetDistributionItem = {
+  table: string
+  label: string
+  count: number
+  source: string
+}
+
+export type PipelineOutcomeStat = {
+  status: string
+  count: number
+  percentage: number
 }
 
 export type OverviewData = {
@@ -56,6 +76,11 @@ export type OverviewData = {
   }
   quality_summary: Record<string, any>
   data_freshness: string
+  station_state_distribution?: StationDistributionItem[]
+  station_zone_distribution?: StationDistributionItem[]
+  dataset_distribution?: DatasetDistributionItem[]
+  pipeline_outcomes?: PipelineOutcomeStat[]
+  latest_pipeline_run?: Record<string, any> | null
 }
 
 export type TrainItem = {
@@ -244,6 +269,32 @@ export type PipelineRunTriggerResponse = {
   summary: Record<string, any>
 }
 
+export type PipelineCatalogItem = {
+  pipeline_name: string
+  display_name: string
+  run_type: string
+  purpose: string
+  source_datasets: string[]
+  destination_targets: string[]
+  current_status: string
+  last_execution_time?: string | null
+  last_success_time?: string | null
+  latest_duration_seconds?: number | null
+  avg_duration_seconds?: number | null
+  total_runs: number
+  successful_runs: number
+  failed_runs: number
+  success_rate_pct: number
+  failure_summary?: string | null
+  is_schedulable: boolean
+}
+
+export type PipelineCatalogResponse = {
+  pipelines: PipelineCatalogItem[]
+  total_registered: number
+  authoritative_store: string
+}
+
 async function apiFetch<T>(endpoint: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
   const timeout = options?.timeoutMs || 8000
@@ -333,17 +384,20 @@ export const api = {
   getPassengerFlow: () => apiFetch<PassengerFlowData>('/api/analytics/passenger-flow'),
   getDataQuality: () => apiFetch<DataQualityData>('/api/data-quality'),
   getPipelineStatus: () => apiFetch<PipelineStatusData>('/api/pipeline/status'),
+  getPipelines: () => apiFetch<PipelineCatalogResponse>('/api/pipelines'),
   getPipelineHistory: (params?: {
     page?: number
     page_size?: number
     status?: string
     run_type?: string
+    pipeline_name?: string
   }) => {
     const searchParams = new URLSearchParams()
     if (params?.page) searchParams.set('page', params.page.toString())
     if (params?.page_size) searchParams.set('page_size', params.page_size.toString())
     if (params?.status && params.status !== 'ALL') searchParams.set('status', params.status)
     if (params?.run_type && params.run_type !== 'ALL') searchParams.set('run_type', params.run_type)
+    if (params?.pipeline_name && params.pipeline_name !== 'ALL') searchParams.set('pipeline_name', params.pipeline_name)
     const qs = searchParams.toString()
     return apiFetch<PipelineHistoryResponse>(`/api/pipeline/history${qs ? `?${qs}` : ''}`)
   },
@@ -361,7 +415,7 @@ export const api = {
 
   checkSystemHealth: async (): Promise<SystemHealthInfo> => {
     const start = Date.now()
-    const checkedAt = new Date().toLocaleTimeString()
+    const checkedAt = formatTime(new Date().toISOString())
     try {
       const health = await api.getHealth()
       const latencyMs = Date.now() - start
@@ -381,7 +435,7 @@ export const api = {
           health,
         }
       }
-      const connDetail = `Connected to rail_signal (${health.counts.trains.toLocaleString()} trains, ${health.counts.stations.toLocaleString()} stations).`
+      const connDetail = `Connected to rail_signal (${formatNumber(health.counts.trains)} trains, ${formatNumber(health.counts.stations)} stations).`
       return {
         state: 'healthy',
         status: 'healthy',
@@ -414,7 +468,7 @@ export const api = {
           error: errMsg,
         }
       }
-      const offlineDetail = `Cannot reach ${API_BASE_URL}/api/health. Start backend with: uvicorn backend.app.main:app --port 8000`
+      const offlineDetail = `Cannot reach ${API_BASE_URL}/api/health. Start backend with: python -m uvicorn backend.app.main:app --port 8000`
       return {
         state: 'backend_offline',
         status: 'backend_offline',

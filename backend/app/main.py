@@ -23,6 +23,7 @@ from backend.app.schemas import (
     HealthResponse,
     OverviewResponse,
     PassengerFlowResponse,
+    PipelineCatalogResponse,
     PipelineHistoryResponse,
     PipelineRunDetail,
     PipelineRunTriggerRequest,
@@ -38,6 +39,7 @@ from backend.app.services import (
     get_health_status,
     get_overview_data,
     get_passenger_flow_analytics,
+    get_pipeline_catalog_service,
     get_pipeline_history_service,
     get_pipeline_run_detail_service,
     get_pipeline_status,
@@ -78,6 +80,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -244,12 +247,23 @@ def pipeline_status():
         raise HTTPException(status_code=500, detail="Failed to load pipeline status.")
 
 
+@app.get("/api/pipelines", response_model=PipelineCatalogResponse, tags=["Data Pipeline"])
+def list_pipelines():
+    """Returns the registered pipeline catalog with live execution statistics, latest status, and metadata."""
+    try:
+        return get_pipeline_catalog_service()
+    except Exception as exc:
+        logger.error("Error retrieving pipeline catalog: %s", exc)
+        raise HTTPException(status_code=500, detail="Failed to load pipeline catalog.")
+
+
 @app.get("/api/pipeline/history", response_model=PipelineHistoryResponse, tags=["Data Pipeline"])
 def pipeline_history(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     status: Optional[str] = Query(None, description="Filter by status: RUNNING, SUCCESS, FAILED"),
     run_type: Optional[str] = Query(None, description="Filter by run_type: VALIDATION, FULL_ETL"),
+    pipeline_name: Optional[str] = Query(None, description="Filter by pipeline name (e.g. rail_signal_orchestrator)"),
 ):
     """Returns paginated pipeline execution runs with duration, record counts, and status."""
     try:
@@ -258,6 +272,7 @@ def pipeline_history(
             page_size=page_size,
             status=status,
             run_type=run_type,
+            pipeline_name=pipeline_name,
         )
     except Exception as exc:
         logger.error("Error querying pipeline history: %s", exc)

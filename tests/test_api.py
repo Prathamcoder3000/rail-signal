@@ -195,3 +195,65 @@ def test_api_error_response_sanitization_pipeline_run():
         assert data["detail"] == "Validation pipeline execution failed."
         assert "/etc/shadow" not in resp.text
         assert "secrets.key" not in resp.text
+
+
+def test_pipelines_catalog_endpoint():
+    """Verifies that GET /api/pipelines returns the registered pipeline catalog."""
+    resp = client.get("/api/pipelines")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "pipelines" in data
+    assert "total_registered" in data
+    assert data["total_registered"] >= 5
+    names = [p["pipeline_name"] for p in data["pipelines"]]
+    assert "rail_signal_orchestrator" in names
+    assert "rail_signal_validation" in names
+    assert "rail_signal_schema_validate" in names
+
+
+def test_pipeline_history_filter_by_pipeline_name():
+    """Verifies that GET /api/pipeline/history supports filtering by pipeline_name."""
+    # 1. Unfiltered
+    resp_all = client.get("/api/pipeline/history?page=1&page_size=10")
+    assert resp_all.status_code == 200
+
+    # 2. Filter by specific registered pipeline
+    resp_filtered = client.get("/api/pipeline/history?pipeline_name=rail_signal_validation&page=1&page_size=10")
+    assert resp_filtered.status_code == 200
+    filt_data = resp_filtered.json()
+    for item in filt_data["items"]:
+        assert "validation" in item["pipeline_name"].lower()
+
+
+def test_overview_enhanced_distribution_fields():
+    """Verifies that GET /api/overview returns real database distribution and outcome fields."""
+    resp = client.get("/api/overview")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    # State distribution
+    assert "station_state_distribution" in data
+    state_dist = data["station_state_distribution"]
+    assert len(state_dist) > 0
+    assert any(s["name"] == "Uttar Pradesh" for s in state_dist)
+
+    # Zone distribution
+    assert "station_zone_distribution" in data
+    zone_dist = data["station_zone_distribution"]
+    assert len(zone_dist) > 0
+
+    # Dataset distribution
+    assert "dataset_distribution" in data
+    ds_dist = data["dataset_distribution"]
+    assert len(ds_dist) == 5
+    tables = [d["table"] for d in ds_dist]
+    assert "stations" in tables
+    assert "trains" in tables
+    assert "schedules" in tables
+    assert "journey_train" in tables
+    assert "journey_test" in tables
+
+    # Pipeline outcomes
+    assert "pipeline_outcomes" in data
+    outcomes = data["pipeline_outcomes"]
+    assert any(o["status"] == "SUCCESS" for o in outcomes)
