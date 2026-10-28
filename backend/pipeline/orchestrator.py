@@ -40,6 +40,7 @@ from backend.pipeline.advisory_lock import (
     AdvisoryLockConnectionError,
     AdvisoryLockContentionError,
     acquire_pipeline_advisory_lock,
+    assert_pipeline_advisory_lock_held,
 )
 from backend.pipeline.database_loader import (
     BATCH_SIZE,
@@ -167,7 +168,9 @@ class ETLOrchestrator:
                 except AdvisoryLockConnectionError as conn_err:
                     err_msg = str(conn_err)
                     logger.error("Lock Connection Failure: %s", err_msg)
-                    raise OrchestratorPreflightError(err_msg) from conn_err
+                    if "Could not connect to database for advisory lock" in err_msg or "Could not configure autocommit" in err_msg:
+                        raise OrchestratorPreflightError(err_msg) from conn_err
+                    raise OrchestratorExecutionError(err_msg) from conn_err
             else:
                 return self._dispatch_flow(normalized_mode)
         finally:
@@ -307,6 +310,8 @@ class ETLOrchestrator:
 
             self._check_interrupted()
             tracker.start_stage("02_idempotent_schema_init")
+            # Verify advisory lock session liveness before executing DDL
+            assert_pipeline_advisory_lock_held()
             init_res = initialize_schema()
             if not init_res.get("is_valid", False):
                 err_msg = f"Schema initialization failed verification: {'; '.join(init_res.get('errors', []))}"
@@ -513,6 +518,8 @@ class ETLOrchestrator:
                         details={"dry_run": True, "message": "Database load skipped due to dry_run mode."},
                     )
                 else:
+                    # Detect lost lock session before beginning database writes
+                    assert_pipeline_advisory_lock_held()
                     load_summary = self._load_datasets_to_database(quality_report.accepted_counts)
                     tracker.finish_stage(
                         "04_database_loading",
@@ -678,6 +685,8 @@ class ETLOrchestrator:
         Loads Parquet datasets into PostgreSQL in batches of 5000 inside a single atomic transaction.
         Enforces rollbacks if any dataset load fails.
         """
+        # Ensure advisory lock remains held before establishing the write connection
+        assert_pipeline_advisory_lock_held()
         from backend.pipeline.database_loader import get_connection
 
         connection = get_connection()
@@ -693,6 +702,8 @@ class ETLOrchestrator:
                         raise RuntimeError(f"Wrong database: {db_name}. Expected {settings.postgres_db}.")
 
                     for table_name, filename in LOADER_DATASETS.items():
+                        # Verify advisory lock remains held throughout every protected write operation
+                        assert_pipeline_advisory_lock_held()
                         parquet_path = self.config.processed_dir / filename
                         if not parquet_path.is_file():
                             raise FileNotFoundError(f"Missing Parquet file for load: {parquet_path}")
@@ -703,6 +714,10 @@ class ETLOrchestrator:
                         cnt = cursor.fetchone()[0]
                         loaded_counts[table_name] = cnt
                         total_loaded += cnt
+
+                    # Final pre-commit lock verification: ensure dedicated lock session is still held
+                    logger.info("Verifying advisory lock ownership prior to committing database transaction...")
+                    assert_pipeline_advisory_lock_held()
 
             logger.info("Atomic database load completed: %d total records loaded.", total_loaded)
             return {"total_loaded": total_loaded, "table_counts": loaded_counts}

@@ -371,3 +371,101 @@ def test_orchestrator_interruption_returns_exit_code_130(capsys):
             assert exit_code == 130
             captured = capsys.readouterr()
             assert "[INTERRUPTED]" in captured.err or "cancelled by user" in captured.err
+
+
+def test_orchestrator_aborts_writes_when_advisory_lock_lost_before_stage_4():
+    """Verifies that if the dedicated advisory lock session drops before Stage 4 writes, execution aborts safely."""
+    from backend.pipeline.advisory_lock import AdvisoryLockConnectionError
+    from backend.pipeline.transformation import QualityReport
+
+    mock_report = QualityReport(
+        run_timestamp="2026-10-27T12:00:00Z",
+        accepted_counts={"stations": 10, "trains": 5, "schedules": 20, "journey_train": 50, "journey_test": 10},
+        quarantined_counts={"stations": 0, "trains": 0, "schedules": 0, "journey_train": 0, "journey_test": 0},
+    )
+
+    config = OrchestratorConfig(
+        mode=OrchestrationMode.ETL,
+        dry_run=False,
+        allow_data_replace=True,
+        quiet=True,
+    )
+    orchestrator = ETLOrchestrator(config)
+
+    # Simulate losing the lock right before stage 4 database loading
+    with patch("backend.pipeline.orchestrator.execute_transformation_pipeline", return_value=mock_report):
+        with patch(
+            "backend.pipeline.orchestrator.assert_pipeline_advisory_lock_held",
+            side_effect=AdvisoryLockConnectionError("Advisory lock verification failed: dedicated session dropped"),
+        ):
+            with patch.object(orchestrator, "_load_datasets_to_database") as mock_db_load:
+                with pytest.raises(OrchestratorExecutionError, match="dedicated session dropped"):
+                    orchestrator.run()
+
+                # Ensure database writes were NEVER invoked
+                mock_db_load.assert_not_called()
+
+
+def test_orchestrator_final_lock_check_failure_triggers_rollback_and_prevents_commit():
+    """
+    F-02 test: Verifies that if the advisory lock is lost right after loading all datasets
+    and before committing the transaction, the final pre-commit check fails, triggering
+    a transaction rollback and preventing connection.commit() from executing.
+    """
+    from backend.pipeline.advisory_lock import AdvisoryLockConnectionError
+    import backend.pipeline.orchestrator as orch_mod
+
+    config = OrchestratorConfig(mode=OrchestrationMode.ETL, dry_run=False, allow_data_replace=True, quiet=True)
+    orchestrator = ETLOrchestrator(config)
+
+    mock_cursor = MagicMock()
+    mock_cursor.fetchone.side_effect = [["rail_signal"], [100], [100], [100], [100], [100]]
+
+    class MockTransactionConnection:
+        def __init__(self):
+            self.committed = False
+            self.rolled_back = False
+            self.closed = False
+
+        def cursor(self):
+            class CursorContext:
+                def __enter__(self):
+                    return mock_cursor
+                def __exit__(self, *args):
+                    pass
+            return CursorContext()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if exc_type is not None:
+                self.rolled_back = True
+            else:
+                self.committed = True
+
+        def close(self):
+            self.closed = True
+
+    mock_conn = MockTransactionConnection()
+
+    check_count = 0
+    def mock_lock_check():
+        nonlocal check_count
+        check_count += 1
+        # The 7th call is the final pre-commit check:
+        if check_count >= 7:
+            raise AdvisoryLockConnectionError("Lock dropped immediately before transaction commit")
+
+    with patch("backend.pipeline.database_loader.get_connection", return_value=mock_conn):
+        with patch.object(orch_mod, "load_dataset", return_value=100):
+            with patch.object(orch_mod, "assert_pipeline_advisory_lock_held", side_effect=mock_lock_check):
+                with patch.object(Path, "is_file", return_value=True):
+                    with pytest.raises(AdvisoryLockConnectionError, match="before transaction commit"):
+                        orchestrator._load_datasets_to_database({"stations": 100})
+
+    # Assert transaction rolled back and was NEVER committed
+    assert mock_conn.rolled_back is True
+    assert mock_conn.committed is False
+    assert mock_conn.closed is True
+    assert check_count >= 7

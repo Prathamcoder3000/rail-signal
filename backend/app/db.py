@@ -222,5 +222,5 @@ def check_db_health() -> Dict[str, Any]:
             "connected": False,
             "database": settings.postgres_db,
             "status": "unreachable",
-            "error": str(exc),
+            "error": "Database connectivity check failed",
         }

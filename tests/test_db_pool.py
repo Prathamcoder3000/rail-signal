@@ -223,3 +223,15 @@ def test_retry_transient_db_operation_exhausted():
 
     assert call_count == 3  # Initial attempt + 2 retries
     assert len(slept) == 2
+
+
+def test_check_db_health_failure_sanitized():
+    """Verifies that check_db_health returns a sanitized generic error message without leaking sensitive credentials."""
+    from backend.app.db import check_db_health
+
+    with patch("backend.app.db.get_db_cursor", side_effect=psycopg2.OperationalError("password authentication failed for user 'postgres'")):
+        result = check_db_health()
+        assert result["connected"] is False
+        assert result["status"] == "unreachable"
+        assert result["error"] == "Database connectivity check failed"
+        assert "password" not in result["error"]

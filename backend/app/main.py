@@ -6,14 +6,17 @@ data quality metrics, and pipeline execution status.
 
 from contextlib import asynccontextmanager
 import logging
-from typing import Optional
+import threading
+import time
+from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app import db
 from backend.app.config import settings
-from backend.app.db import close_db_pool, get_db_pool
 from backend.app.logging_config import configure_logging
+from backend.pipeline.monitoring import sanitize_error_message
 from backend.app.schemas import (
     DataQualityResponse,
     DelayAnalyticsResponse,
@@ -52,12 +55,12 @@ async def lifespan(app: FastAPI):
     """Lifecycle manager: initializes connection pool on startup and closes on shutdown."""
     logger.info("Starting up %s (v%s)...", settings.app_name, settings.app_version)
     try:
-        get_db_pool()
+        db.get_db_pool()
     except Exception as exc:
         logger.warning("Could not pre-initialize DB pool on startup: %s", exc)
     yield
     logger.info("Shutting down %s...", settings.app_name)
-    close_db_pool()
+    db.close_db_pool()
 
 
 app = FastAPI(
@@ -82,6 +85,61 @@ app.add_middleware(
 
 
 # ==============================================================================
+# Prometheus Metrics Cache Configuration
+# ==============================================================================
+METRICS_CACHE_TTL_SECONDS: float = 60.0
+_METRICS_CACHE_LOCK = threading.Lock()
+_METRICS_TABLE_COUNTS_CACHE: Dict[str, int] = {}
+_METRICS_CACHE_TIMESTAMP: float = 0.0
+
+
+def get_cached_table_counts(ttl: float = METRICS_CACHE_TTL_SECONDS) -> Dict[str, int]:
+    """
+    Returns verified core table counts cached in-memory with a thread-safe TTL.
+    Prevents stampeding / duplicate full-table scans on high-frequency scrapes.
+    """
+    global _METRICS_CACHE_TIMESTAMP, _METRICS_TABLE_COUNTS_CACHE
+    now = time.time()
+
+    if _METRICS_TABLE_COUNTS_CACHE and (now - _METRICS_CACHE_TIMESTAMP) < ttl:
+        return _METRICS_TABLE_COUNTS_CACHE
+
+    with _METRICS_CACHE_LOCK:
+        now = time.time()
+        if _METRICS_TABLE_COUNTS_CACHE and (now - _METRICS_CACHE_TIMESTAMP) < ttl:
+            return _METRICS_TABLE_COUNTS_CACHE
+
+        query = (
+            "SELECT "
+            "(SELECT COUNT(*) FROM stations) AS stations, "
+            "(SELECT COUNT(*) FROM trains) AS trains, "
+            "(SELECT COUNT(*) FROM schedules) AS schedules, "
+            "(SELECT COUNT(*) FROM journey_train) AS journey_train, "
+            "(SELECT COUNT(*) FROM journey_test) AS journey_test;"
+        )
+        new_counts: Dict[str, int] = {}
+        with db.get_db_cursor() as cur:
+            cur.execute(query)
+            row = cur.fetchone()
+            if row:
+                if isinstance(row, dict):
+                    for k in ("stations", "trains", "schedules", "journey_train", "journey_test"):
+                        new_counts[k] = int(row.get(k, 0))
+                else:
+                    new_counts = {
+                        "stations": int(row[0]),
+                        "trains": int(row[1]),
+                        "schedules": int(row[2]),
+                        "journey_train": int(row[3]),
+                        "journey_test": int(row[4]),
+                    }
+
+        _METRICS_TABLE_COUNTS_CACHE = new_counts
+        _METRICS_CACHE_TIMESTAMP = now
+        return _METRICS_TABLE_COUNTS_CACHE
+
+
+# ==============================================================================
 # API Endpoints
 # ==============================================================================
 
@@ -98,7 +156,7 @@ def get_overview():
         return get_overview_data()
     except Exception as exc:
         logger.error("Error generating overview: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to generate overview metrics: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to generate overview metrics.")
 
 
 @app.get("/api/trains", response_model=TrainListResponse, tags=["Trains"])
@@ -124,7 +182,7 @@ def list_trains(
         )
     except Exception as exc:
         logger.error("Error listing trains: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to query train records: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to query train records.")
 
 
 @app.get("/api/trains/{train_number}", response_model=TrainDetailResponse, tags=["Trains"])
@@ -143,7 +201,7 @@ def train_performance():
         return get_train_performance_analytics()
     except Exception as exc:
         logger.error("Error computing train performance: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to compute train performance: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to compute train performance analytics.")
 
 
 @app.get("/api/analytics/delays", response_model=DelayAnalyticsResponse, tags=["Analytics"])
@@ -153,7 +211,7 @@ def delay_analytics():
         return get_delay_analytics()
     except Exception as exc:
         logger.error("Error computing delay analytics: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to compute delay statistics: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to compute delay statistics.")
 
 
 @app.get("/api/analytics/passenger-flow", response_model=PassengerFlowResponse, tags=["Analytics"])
@@ -163,7 +221,7 @@ def passenger_flow_analytics():
         return get_passenger_flow_analytics()
     except Exception as exc:
         logger.error("Error computing passenger flow: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to compute passenger flow metrics: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to compute passenger flow metrics.")
 
 
 @app.get("/api/data-quality", response_model=DataQualityResponse, tags=["Data Quality"])
@@ -173,7 +231,7 @@ def data_quality():
         return get_data_quality_report()
     except Exception as exc:
         logger.error("Error fetching data quality report: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to load data quality report: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to load data quality report.")
 
 
 @app.get("/api/pipeline/status", response_model=PipelineStatusResponse, tags=["Data Pipeline"])
@@ -183,7 +241,7 @@ def pipeline_status():
         return get_pipeline_status()
     except Exception as exc:
         logger.error("Error fetching pipeline status: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to load pipeline status: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to load pipeline status.")
 
 
 @app.get("/api/pipeline/history", response_model=PipelineHistoryResponse, tags=["Data Pipeline"])
@@ -203,7 +261,7 @@ def pipeline_history(
         )
     except Exception as exc:
         logger.error("Error querying pipeline history: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Failed to query pipeline execution history: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Failed to query pipeline execution history.")
 
 
 @app.get("/api/pipeline/history/{run_id}", response_model=PipelineRunDetail, tags=["Data Pipeline"])
@@ -218,7 +276,7 @@ def pipeline_run_detail(run_id: str):
         raise
     except Exception as exc:
         logger.error("Error fetching run detail '%s': %s", run_id, exc)
-        raise HTTPException(status_code=500, detail=f"Failed to load execution details for run '{run_id}': {str(exc)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load execution details for run '{run_id}'.")
 
 
 @app.post("/api/pipeline/run", response_model=PipelineRunTriggerResponse, tags=["Data Pipeline"])
@@ -231,12 +289,12 @@ def trigger_pipeline_run(payload: Optional[PipelineRunTriggerRequest] = None):
     try:
         return trigger_validation_pipeline_service(mode=mode)
     except ValueError as val_err:
-        raise HTTPException(status_code=400, detail=str(val_err))
+        raise HTTPException(status_code=400, detail=sanitize_error_message(val_err))
     except RuntimeError as run_err:
-        raise HTTPException(status_code=409, detail=str(run_err))
+        raise HTTPException(status_code=409, detail=sanitize_error_message(run_err))
     except Exception as exc:
         logger.error("Error executing validation pipeline: %s", exc)
-        raise HTTPException(status_code=500, detail=f"Validation pipeline execution failed: {str(exc)}")
+        raise HTTPException(status_code=500, detail="Validation pipeline execution failed.")
 
 
 @app.get("/metrics", tags=["Observability"])
@@ -247,7 +305,6 @@ def prometheus_metrics():
     Bounded cardinality: only statuses and stages are labeled; zero sensitive data.
     """
     from backend.pipeline.monitoring import get_pipeline_history_stats
-    from backend.app.db import get_db_cursor
 
     lines = [
         "# HELP rail_signal_pipeline_runs_total Total number of pipeline execution runs by terminal status",
@@ -265,24 +322,39 @@ def prometheus_metrics():
             lines.append("# HELP rail_signal_pipeline_latest_duration_seconds Duration of latest pipeline run in seconds")
             lines.append("# TYPE rail_signal_pipeline_latest_duration_seconds gauge")
             lines.append(f"rail_signal_pipeline_latest_duration_seconds {latest_dur}")
+    except Exception as stats_err:
+        logger.warning("Error collecting pipeline run stats for metrics: %s", stats_err)
 
-        lines.append("# HELP rail_signal_database_up Database connectivity health probe (1 = connected, 0 = unreachable)")
-        lines.append("# TYPE rail_signal_database_up gauge")
-        lines.append("rail_signal_database_up 1")
+    # Independent database connectivity probe and cached table counts
+    db_is_up = False
+    table_counts: Optional[Dict[str, int]] = None
 
+    try:
+        # Lightweight liveness query
+        with db.get_db_cursor() as cur:
+            cur.execute("SELECT 1;")
+            cur.fetchone()
+
+        # Cache retrieval (refreshes from DB on cache miss)
+        table_counts = get_cached_table_counts()
+        db_is_up = True
+    except Exception as db_err:
+        sanitized = sanitize_error_message(db_err)
+        logger.warning("Database unavailable during metrics generation: %s", sanitized)
+        db_is_up = False
+
+    # Emit rail_signal_database_up sample exactly once per response
+    lines.append("# HELP rail_signal_database_up Database connectivity health probe (1 = connected, 0 = unreachable)")
+    lines.append("# TYPE rail_signal_database_up gauge")
+    lines.append(f"rail_signal_database_up {1 if db_is_up else 0}")
+
+    # Emit table counts only if database and counts are successfully available
+    if db_is_up and table_counts is not None:
         lines.append("# HELP rail_signal_records_verified_total Total verified relational records in database")
         lines.append("# TYPE rail_signal_records_verified_total gauge")
-        with get_db_cursor() as cur:
-            for t in ("stations", "trains", "schedules", "journey_train", "journey_test"):
-                cur.execute(f"SELECT COUNT(*) AS cnt FROM {t};")
-                row = cur.fetchone()
-                cnt = row["cnt"] if isinstance(row, dict) else row[0]
-                lines.append(f'rail_signal_records_verified_total{{table="{t}"}} {cnt}')
-    except Exception as exc:
-        logger.warning("Error generating metrics: %s", exc)
-        lines.append("# HELP rail_signal_database_up Database connectivity health probe (1 = connected, 0 = unreachable)")
-        lines.append("# TYPE rail_signal_database_up gauge")
-        lines.append("rail_signal_database_up 0")
+        for t in ("stations", "trains", "schedules", "journey_train", "journey_test"):
+            cnt = table_counts.get(t, 0)
+            lines.append(f'rail_signal_records_verified_total{{table="{t}"}} {cnt}')
 
     content = "\n".join(lines) + "\n"
     return Response(content=content, media_type="text/plain; version=0.0.4; charset=utf-8")

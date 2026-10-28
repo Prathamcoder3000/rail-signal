@@ -156,3 +156,42 @@ def test_pipeline_status_endpoint():
     assert len(data["stages"]) >= 7
     assert "outputs" in data
     assert "stations" in data["outputs"]
+
+
+def test_api_error_response_sanitization_overview():
+    """Verifies that internal DB exception details and credentials are not leaked in HTTP 500 responses."""
+    from unittest.mock import patch
+    sensitive_msg = "password=super_secret_pw connection to 192.168.1.50:5432 failed"
+    with patch("backend.app.main.get_overview_data", side_effect=Exception(sensitive_msg)):
+        resp = client.get("/api/overview")
+        assert resp.status_code == 500
+        data = resp.json()
+        assert data["detail"] == "Failed to generate overview metrics."
+        assert "super_secret_pw" not in resp.text
+        assert "192.168.1.50" not in resp.text
+
+
+def test_api_error_response_sanitization_trains():
+    """Verifies that SQL error details are not leaked in train listing 500 responses."""
+    from unittest.mock import patch
+    sensitive_msg = "syntax error at or near 'SELECT secret_token FROM credentials'"
+    with patch("backend.app.main.get_trains", side_effect=Exception(sensitive_msg)):
+        resp = client.get("/api/trains")
+        assert resp.status_code == 500
+        data = resp.json()
+        assert data["detail"] == "Failed to query train records."
+        assert "secret_token" not in resp.text
+        assert "credentials" not in resp.text
+
+
+def test_api_error_response_sanitization_pipeline_run():
+    """Verifies that unhandled pipeline execution errors return safe client message without internal paths."""
+    from unittest.mock import patch
+    sensitive_msg = "Critical filesystem failure at /etc/shadow or D:/DE project/secrets.key"
+    with patch("backend.app.main.trigger_validation_pipeline_service", side_effect=Exception(sensitive_msg)):
+        resp = client.post("/api/pipeline/run")
+        assert resp.status_code == 500
+        data = resp.json()
+        assert data["detail"] == "Validation pipeline execution failed."
+        assert "/etc/shadow" not in resp.text
+        assert "secrets.key" not in resp.text
